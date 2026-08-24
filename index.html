@@ -41,7 +41,7 @@
         }
         .drink-card:hover { border-color: #d31b23; transform: translateY(-5px); background: #1c2638; }
         .drink-icon { font-size: 34px; margin-bottom: 6px; }
-        .drink-name { font-size: 15px; font-weight: bold; color: #fff; margin-bottom: 4px; }
+        .drink-name { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 4px; }
         .drink-table { font-size: 12px; color: #ffd54f; font-weight: bold; }
 
         /* شاشات الـ HUD */
@@ -143,18 +143,18 @@
         <div class="drink-options">
             <div class="drink-card" onclick="selectDrink(1)">
                 <div class="drink-icon">☕</div>
-                <div class="drink-name">قهوة وإسبريسو ساخن</div>
-                <div class="drink-table">طاولة 1: قسم المشروبات الساخنة</div>
+                <div class="drink-name">قهوة</div>
+                <div class="drink-table">طاولة 1: قسم القهوة</div>
             </div>
             <div class="drink-card" onclick="selectDrink(2)">
-                <div class="drink-icon">🍹</div>
-                <div class="drink-name">عصائر طازجة وموهيتو</div>
-                <div class="drink-table">طاولة 2: قسم العصائر والموهيتو</div>
+                <div class="drink-icon">💧</div>
+                <div class="drink-name">مايه</div>
+                <div class="drink-table">طاولة 2: قسم المياه</div>
             </div>
             <div class="drink-card" onclick="selectDrink(3)">
-                <div class="drink-icon">🥤</div>
-                <div class="drink-name">مشروبات مثلجة وصودا</div>
-                <div class="drink-table">طاولة 3: قسم المشروبات الغازية</div>
+                <div class="drink-icon">🧃</div>
+                <div class="drink-name">عصير</div>
+                <div class="drink-table">طاولة 3: قسم العصائر</div>
             </div>
         </div>
     </div>
@@ -321,9 +321,9 @@
         const TABLE_DIMS = { width: 7.2, height: 1.8, depth: 3.4 };
 
         const STATIONS = [
-            { id: 1, name: "طاولة 1: قسم المشروبات الساخنة والقهوة", shortName: "قسم المشروبات الساخنة", color: 0x1976d2, x: -25, z: 22 },
-            { id: 2, name: "طاولة 2: قسم العصائر الطازجة والموهيتو", shortName: "قسم العصائر والموهيتو", color: 0x388e3c, x: 0, z: 32 },
-            { id: 3, name: "طاولة 3: قسم المشروبات الغازية والمثلجة", shortName: "قسم المشروبات الغازية", color: 0xf57c00, x: 25, z: 22 }
+            { id: 1, name: "قهوة", shortName: "قهوة", color: 0x1976d2, x: -25, z: 22 },
+            { id: 2, name: "مايه", shortName: "مايه", color: 0x388e3c, x: 0, z: 32 },
+            { id: 3, name: "عصير", shortName: "عصير", color: 0xf57c00, x: 25, z: 22 }
         ];
 
         const keys = { up: false, down: false, left: false, right: false, liftUp: false, liftDown: false, teleOut: false, teleIn: false };
@@ -333,14 +333,14 @@
         let prevMousePos = { x: 0, y: 0 };
         let camOrbitYaw = 0;
         let camOrbitPitch = 0;
-        let currentZoomDist = 26; // مسافة الكاميرا للزووم
+        let currentZoomDist = 26;
 
         function selectDrink(id) {
             audio.init();
             targetStation = STATIONS.find(s => s.id === id);
             document.getElementById('selected-drink-txt').innerText = targetStation.name;
             document.getElementById('menu-modal').style.display = 'none';
-            showAlert(`اسحب بإصبعك على الشاشة لتحريك الكاميرا لرؤية الطريق والشوكة، ثم سلّم إلى: ${targetStation.name}`, "#ffca28");
+            showAlert(`اسحب بإصبعك على الشاشة لتحريك الكاميرا، ووجه الشوكة لنقل: ${targetStation.name}`, "#ffca28");
         }
 
         function showAlert(msg, color = "#ff9800") {
@@ -398,7 +398,6 @@
             setupVirtualJoystick();
             setupCameraControls(container);
 
-            // دعم الكيبورد للاب توب
             window.addEventListener('keydown', e => {
                 audio.init();
                 const k = e.key.toLowerCase();
@@ -440,9 +439,6 @@
             animate();
         }
 
-        // ==============================================
-        // 3. تحكم الشاشة والكاميرا (سحب للتدوير + زووم Pinch)
-        // ==============================================
         function setupCameraControls(container) {
             let lastTouchX = 0;
             let lastTouchY = 0;
@@ -465,7 +461,6 @@
 
             window.addEventListener('mouseup', () => isDraggingCam = false);
 
-            // دعم اللمس للإصبع الواحد (تدوير الكاميرا) وإصبعين (زووم In / Out)
             container.addEventListener('touchstart', e => {
                 if(e.target.closest('#controls-wrapper') || e.target.closest('#joystick-zone')) return;
                 
@@ -508,7 +503,6 @@
                 if (e.touches.length < 2) initialPinchDist = null;
             });
 
-            // دعم عجلة الماوس للزووم على اللاب توب
             container.addEventListener('wheel', e => {
                 currentZoomDist = Math.max(16, Math.min(45, currentZoomDist + e.deltaY * 0.02));
             });
@@ -683,7 +677,7 @@
                 ctx.strokeRect(5, 5, 590, 130);
 
                 ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 30px Tahoma, sans-serif';
+                ctx.font = 'bold 34px Tahoma, sans-serif';
                 ctx.textAlign = 'center';
                 ctx.fillText(st.name, 300, 80);
 
