@@ -364,16 +364,19 @@
         function sendOrderToGoogleSheet(drinkName) {
             const statusEl = document.getElementById('sheet-status');
             
-            fetch(GOOGLE_SCRIPT_WEBAPP_URL, {
-                method: "POST",
-                mode: "no-cors",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    drink: drinkName
-                })
+            // تنظيف اسم المشروب محلياً أيضاً قبل الإرسال
+            const pureDrink = drinkName.replace(/^طاولة\s*\d+\s*:\s*/i, "").replace(/^قسم\s*/i, "").trim();
+
+            const targetUrl = `${GOOGLE_SCRIPT_WEBAPP_URL}?drink=${encodeURIComponent(pureDrink)}`;
+
+            fetch(targetUrl, {
+                method: "GET",
+                mode: "no-cors"
             })
             .then(() => {
                 statusEl.innerText = "تم ارسال طلبك للبوفيه ونتمني لك يوم رائع";
+                statusEl.style.borderColor = "#10b981";
+                statusEl.style.color = "#a7f3d0";
             })
             .catch(() => {
                 statusEl.innerText = "تم ارسال طلبك للبوفيه ونتمني لك يوم رائع";
