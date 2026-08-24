@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Kalmar Reachstacker - محاكي ضيافة كالمر 3D</title>
+    <title>Kalmar Reachstacker - ضيافة كالمر 3D</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { overflow: hidden; background: #080a0f; color: #fff; }
@@ -100,7 +100,6 @@
 </head>
 <body>
 
-    <!-- شاشة اختيار المشروب -->
     <div id="menu-modal">
         <div class="menu-title">🥤 مرحباً بك في بوفيه ضيافة كالمر</div>
         <div class="menu-sub">اختر طلبك للبدء في نقله وتوصيله بواسطة رافعة الحاويات <b>Kalmar Reachstacker</b>:</div>
@@ -163,7 +162,7 @@
 
     <script>
         // ==============================================
-        // 1. نظام الصوت الصناعي المتكامل
+        // 1. نظام الصوت الصناعي
         // ==============================================
         class KalmarHeavyAudio {
             constructor() {
@@ -272,18 +271,22 @@
         const audio = new KalmarHeavyAudio();
 
         // ==============================================
-        // 2. إعداد المشهد ثلاثي الأبعاد
+        // 2. إعداد المشهد والمقاييس الهندسية الواقعية
         // ==============================================
         let scene, camera, renderer;
         let vehicle, boomBase, spreaderGroup, cargoBox;
         let targetStation = null;
         let isCargoLocked = false;
-        let boomHeight = 0.0; // 0.0 إلى 4.2 متر
+        let boomHeight = 0.0; // من 0.0 إلى 4.5m
+
+        // مقاسات الحاوية 20 قدم (بالعرض بالنسبة للرافعة)
+        const CONTAINER_DIMS = { width: 6.1, height: 2.6, depth: 2.4 };
+        const TABLE_DIMS = { width: 7.2, height: 1.8, depth: 3.4 };
 
         const STATIONS = [
-            { id: 1, name: "طاولة 1: قسم المشروبات الساخنة والقهوة", shortName: "قسم المشروبات الساخنة", color: 0x1976d2, x: -26, z: 22, height: 2.2 },
-            { id: 2, name: "طاولة 2: قسم العصائر الطازجة والموهيتو", shortName: "قسم العصائر والموهيتو", color: 0x388e3c, x: 0, z: 32, height: 2.2 },
-            { id: 3, name: "طاولة 3: قسم المشروبات الغازية والمثلجة", shortName: "قسم المشروبات الغازية", color: 0xf57c00, x: 26, z: 22, height: 2.2 }
+            { id: 1, name: "طاولة 1: قسم المشروبات الساخنة والقهوة", shortName: "قسم المشروبات الساخنة", color: 0x1976d2, x: -25, z: 22 },
+            { id: 2, name: "طاولة 2: قسم العصائر الطازجة والموهيتو", shortName: "قسم العصائر والموهيتو", color: 0x388e3c, x: 0, z: 32 },
+            { id: 3, name: "طاولة 3: قسم المشروبات الغازية والمثلجة", shortName: "قسم المشروبات الغازية", color: 0xf57c00, x: 25, z: 22 }
         ];
 
         const keys = { up: false, down: false, left: false, right: false, liftUp: false, liftDown: false };
@@ -335,7 +338,7 @@
             buildCargoContainer();
             buildKalmarModel();
 
-            // أزرار الكيبورد
+            // أحداث الكيبورد
             window.addEventListener('keydown', e => {
                 audio.init();
                 const k = e.key.toLowerCase();
@@ -358,7 +361,7 @@
                 if (k === 'f' || k === 'ب') keys.liftDown = false;
             });
 
-            // أزرار اللمس
+            // أحداث اللمس
             const setupTouch = (id, keyName) => {
                 const el = document.getElementById(id);
                 const start = () => { audio.init(); keys[keyName] = true; el.classList.add('active'); };
@@ -376,7 +379,7 @@
         }
 
         // ==============================================
-        // 3. بناء العناصر وتجهيز الطاولات
+        // 3. بناء العناصر والمجسمات بدقة 100%
         // ==============================================
         function buildWorld() {
             const ground = new THREE.Mesh(
@@ -397,26 +400,26 @@
                 const group = new THREE.Group();
                 group.position.set(st.x, 0, st.z);
 
-                // هيكل الطاولة (Solid Obstacle)
+                // هيكل الطاولة الصلب
                 const tableMesh = new THREE.Mesh(
-                    new THREE.BoxGeometry(10.5, st.height, 4.8),
+                    new THREE.BoxGeometry(TABLE_DIMS.width, TABLE_DIMS.height, TABLE_DIMS.depth),
                     new THREE.MeshStandardMaterial({ color: st.color, roughness: 0.4 })
                 );
-                tableMesh.position.y = st.height / 2;
+                tableMesh.position.y = TABLE_DIMS.height / 2;
                 tableMesh.receiveShadow = true;
                 tableMesh.castShadow = true;
                 group.add(tableMesh);
 
                 // سطح الإنزال المضيء
                 const pad = new THREE.Mesh(
-                    new THREE.PlaneGeometry(9.6, 4.0),
+                    new THREE.PlaneGeometry(CONTAINER_DIMS.width + 0.4, CONTAINER_DIMS.depth + 0.4),
                     new THREE.MeshBasicMaterial({ color: 0xffeb3b, wireframe: true })
                 );
                 pad.rotation.x = -Math.PI / 2;
-                pad.position.y = st.height + 0.02;
+                pad.position.y = TABLE_DIMS.height + 0.02;
                 group.add(pad);
 
-                // لافتة اسم الطاولة الضخمة والواضحة جداً
+                // لافتة اسم الطاولة
                 const canvas = document.createElement('canvas');
                 canvas.width = 600; canvas.height = 140;
                 const ctx = canvas.getContext('2d');
@@ -433,29 +436,33 @@
 
                 const tex = new THREE.CanvasTexture(canvas);
                 const label = new THREE.Mesh(new THREE.PlaneGeometry(8.5, 2.0), new THREE.MeshBasicMaterial({ map: tex }));
-                label.position.set(0, st.height + 2.2, 0);
+                label.position.set(0, TABLE_DIMS.height + 2.2, 0);
                 group.add(label);
 
                 scene.add(group);
             });
         }
 
-        // الحاوية الأفقية
         function buildCargoContainer() {
             cargoBox = new THREE.Group();
-            cargoBox.position.set(0, 1.6, -8); // مركزها على الأرض (نصف الارتفاع = 1.6)
+            // وضع مركز الحاوية على ارتفاع نصف طولها حتى يستقر قاعها تماماً على الأرض (Y=0)
+            cargoBox.position.set(0, CONTAINER_DIMS.height / 2, -6);
 
             const body = new THREE.Mesh(
-                new THREE.BoxGeometry(9.2, 3.2, 3.6),
+                new THREE.BoxGeometry(CONTAINER_DIMS.width, CONTAINER_DIMS.height, CONTAINER_DIMS.depth),
                 new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.4 })
             );
             body.castShadow = true;
             body.receiveShadow = true;
             cargoBox.add(body);
 
-            // زوايا التويستلوك
+            // زوايا التويستلوك الحقيقية
             const cornerMat = new THREE.MeshStandardMaterial({ color: 0x111 });
-            [[-4.5, 1.55, -1.7], [4.5, 1.55, -1.7], [-4.5, 1.55, 1.7], [4.5, 1.55, 1.7]].forEach(p => {
+            const hw = CONTAINER_DIMS.width / 2 - 0.15;
+            const hh = CONTAINER_DIMS.height / 2 - 0.15;
+            const hd = CONTAINER_DIMS.depth / 2 - 0.15;
+
+            [[-hw, hh, -hd], [hw, hh, -hd], [-hw, hh, hd], [hw, hh, hd]].forEach(p => {
                 const corner = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), cornerMat);
                 corner.position.set(...p);
                 cargoBox.add(corner);
@@ -471,15 +478,15 @@
             const darkMat = new THREE.MeshStandardMaterial({ color: 0x1f2327, roughness: 0.6 });
             const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x182430, transparent: true, opacity: 0.7 });
 
-            // الشاسيه
-            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.8, 9.6), redMat);
+            // الشاسيه ممدد ليتسع للمعدة الحقيقية
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.8, 10.5), redMat);
             chassis.position.y = 2.0;
             chassis.castShadow = true;
             vehicle.add(chassis);
 
             // الثقل الخلفي
-            const cw = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.4, 2.4), redMat);
-            cw.position.set(0, 2.3, -4.5);
+            const cw = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.4, 2.5), redMat);
+            cw.position.set(0, 2.3, -4.8);
             cw.castShadow = true;
             vehicle.add(cw);
 
@@ -490,7 +497,7 @@
 
             // العجلات
             const wheelGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.9, 20);
-            [[-2.4, 1.2, 3.2], [2.4, 1.2, 3.2], [-2.4, 1.2, -3.2], [2.4, 1.2, -3.2]].forEach(p => {
+            [[-2.2, 1.2, 3.5], [2.2, 1.2, 3.5], [-2.2, 1.2, -3.5], [2.2, 1.2, -3.5]].forEach(p => {
                 const w = new THREE.Mesh(wheelGeo, darkMat);
                 w.rotation.z = Math.PI / 2;
                 w.position.set(...p);
@@ -498,24 +505,28 @@
                 vehicle.add(w);
             });
 
-            // الذراع والماسك
+            // الذراع الرئيسي مع إزاحة أمامية كافية لتجنب لمس الشاسيه للحاوية
             boomBase = new THREE.Group();
             boomBase.position.set(0, 3.8, -2.8);
 
-            const outerBoom = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 11.5), darkMat);
-            outerBoom.position.set(0, 0, 5.2);
+            const outerBoom = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 13.0), darkMat);
+            outerBoom.position.set(0, 0, 6.0);
             outerBoom.castShadow = true;
             boomBase.add(outerBoom);
 
+            // الماسك (Spreader) بالأبعاد المطابقة للحاوية تماماً
             spreaderGroup = new THREE.Group();
-            spreaderGroup.position.set(0, -0.4, 11.0);
+            spreaderGroup.position.set(0, -0.4, 12.5); // ممتد للأمام بمقدار 9.7m من مقدمة الشاسيه
 
-            const spreaderMain = new THREE.Mesh(new THREE.BoxGeometry(9.4, 0.45, 3.8), darkMat);
+            const spreaderMain = new THREE.Mesh(new THREE.BoxGeometry(CONTAINER_DIMS.width + 0.2, 0.45, CONTAINER_DIMS.depth + 0.2), darkMat);
             spreaderMain.castShadow = true;
             spreaderGroup.add(spreaderMain);
 
+            // زعانف الإرشاد
             const flipperMat = new THREE.MeshStandardMaterial({ color: 0xffeb3b });
-            [[-4.6, -0.6, -1.8], [4.6, -0.6, -1.8], [-4.6, -0.6, 1.8], [4.6, -0.6, 1.8]].forEach(fp => {
+            const fX = CONTAINER_DIMS.width / 2 + 0.1;
+            const fZ = CONTAINER_DIMS.depth / 2 + 0.1;
+            [[-fX, -0.6, -fZ], [fX, -0.6, -fZ], [-fX, -0.6, fZ], [fX, -0.6, fZ]].forEach(fp => {
                 const f = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.0, 0.3), flipperMat);
                 f.position.set(...fp);
                 spreaderGroup.add(f);
@@ -529,26 +540,29 @@
         }
 
         // ==============================================
-        // 4. نظام الاصطدام والحدود الصلبة (Collision Detection)
+        // 4. نظام فيزياء الاصطدام والحدود الصلبة (Solid AABB)
         // ==============================================
-        function checkCollisions(nextX, nextZ) {
-            // فحص التصادم مع طاولات البوفيه
-            for (let st of STATIONS) {
-                // صندوق حدود الطاولة (AABB)
-                const minX = st.x - 5.5, maxX = st.x + 5.5;
-                const minZ = st.z - 2.8, maxZ = st.z + 2.8;
+        function checkVehicleCollision(nextX, nextZ, angle) {
+            // أبعاد الونش الصلب (نصف القطر الأفقي)
+            const vehicleRadiusX = 2.2;
+            const vehicleRadiusZ = 5.4;
 
-                if (nextX >= minX && nextX <= maxX && nextZ >= minZ && nextZ <= maxZ) {
+            // 1. فحص الاصطدام مع طاولات البوفيه
+            for (let st of STATIONS) {
+                const tableHalfW = TABLE_DIMS.width / 2 + vehicleRadiusX;
+                const tableHalfD = TABLE_DIMS.depth / 2 + vehicleRadiusZ;
+
+                if (Math.abs(nextX - st.x) < tableHalfW && Math.abs(nextZ - st.z) < tableHalfD) {
                     return true;
                 }
             }
 
-            // فحص التصادم مع الحاوية إذا كانت غير مقفولة وموضوعة على الأرض
+            // 2. فحص الاصطدام مع الحاوية إذا كانت على الأرض وغير مرفوعة
             if (!isCargoLocked) {
-                const minX = cargoBox.position.x - 4.8, maxX = cargoBox.position.x + 4.8;
-                const minZ = cargoBox.position.z - 2.0, maxZ = cargoBox.position.z + 2.0;
+                const cargoHalfW = CONTAINER_DIMS.width / 2 + vehicleRadiusX;
+                const cargoHalfD = CONTAINER_DIMS.depth / 2 + vehicleRadiusZ;
 
-                if (nextX >= minX && nextX <= maxX && nextZ >= minZ && nextZ <= maxZ) {
+                if (Math.abs(nextX - cargoBox.position.x) < cargoHalfW && Math.abs(nextZ - cargoBox.position.z) < cargoHalfD) {
                     return true;
                 }
             }
@@ -557,7 +571,7 @@
         }
 
         // ==============================================
-        // 5. الحركة وتحديث المشهد
+        // 5. حركة الونش والفيزياء
         // ==============================================
         let speed = 0;
         let steer = 0;
@@ -565,7 +579,6 @@
         function updateVehicle() {
             if (!targetStation) return;
 
-            // تسارع وفرامل
             if (keys.up) speed = Math.min(speed + 0.015, 0.26);
             else if (keys.down) speed = Math.max(speed - 0.015, -0.16);
             else speed *= 0.88;
@@ -573,23 +586,22 @@
             if (keys.left) steer += 0.028;
             if (keys.right) steer -= 0.028;
 
-            // حساب الموقع الجديد وفحص التصادم قبل التحرك
             const nextX = vehicle.position.x + Math.sin(steer) * speed;
             const nextZ = vehicle.position.z + Math.cos(steer) * speed;
 
-            if (!checkCollisions(nextX, nextZ)) {
+            // تطبيق الاصطدام الفيزيائي الحقيقي
+            if (!checkVehicleCollision(nextX, nextZ, steer)) {
                 vehicle.rotation.y = steer;
                 vehicle.position.x = nextX;
                 vehicle.position.z = nextZ;
             } else {
-                // اصطدام صلب: توقف وعكس الحركة قليلاً
-                if (Math.abs(speed) > 0.05) audio.playBump();
-                speed = -speed * 0.3;
+                if (Math.abs(speed) > 0.04) audio.playBump();
+                speed = -speed * 0.2; // ارتداد فوري لمنع الاختراق
             }
 
             // حركة الهيدروليك
             let isHyd = false;
-            if (keys.liftUp && boomHeight < 4.2) { boomHeight += 0.035; isHyd = true; }
+            if (keys.liftUp && boomHeight < 4.5) { boomHeight += 0.035; isHyd = true; }
             if (keys.liftDown && boomHeight > 0.0) { boomHeight -= 0.035; isHyd = true; }
             if (isHyd) audio.playHydraulic();
 
@@ -601,7 +613,7 @@
         }
 
         // ==============================================
-        // 6. القفل والإنزال الطبقي الواقعي
+        // 6. القفل والإنزال الطبقي الحقيقي (True Surface Contact)
         // ==============================================
         function toggleTwistlocks() {
             if (!targetStation) return;
@@ -613,11 +625,11 @@
             cargoBox.getWorldPosition(cargoWorldPos);
 
             if (!isCargoLocked) {
-                // شروط الالتقاط
+                // شروط الالتقاط: تطابق موضع الماسك تماماً مع قمة الحاوية
                 const horizDist = Math.hypot(spreaderWorldPos.x - cargoWorldPos.x, spreaderWorldPos.z - cargoWorldPos.z);
-                const heightDiff = Math.abs(spreaderWorldPos.y - (cargoWorldPos.y + 1.6));
+                const heightDiff = Math.abs(spreaderWorldPos.y - (cargoWorldPos.y + CONTAINER_DIMS.height / 2));
 
-                if (horizDist > 3.0) {
+                if (horizDist > 2.8) {
                     showAlert("⚠️ أنت بعيد! وجّه الونش بحيث تتطابق الماسكة فوق الحاوية بالعرض.");
                     return;
                 }
@@ -626,8 +638,10 @@
                     return;
                 }
 
+                // ربط الحاوية بالماسك
                 spreaderGroup.attach(cargoBox);
-                cargoBox.position.set(0, -1.8, 0);
+                // محاذاة قمة الحاوية مع أسفل الماسك مباشرة
+                cargoBox.position.set(0, -CONTAINER_DIMS.height / 2 - 0.2, 0);
                 cargoBox.rotation.set(0, 0, 0);
 
                 isCargoLocked = true;
@@ -635,27 +649,27 @@
                 showAlert(`🔒 تم قفل الحاوية بنجاح! ارفع الذراع وتوجه إلى: ${targetStation.name}`, "#00e676");
             } else {
                 // فحص مكان الإنزال
-                const nearTable = STATIONS.find(st => Math.hypot(cargoWorldPos.x - st.x, cargoWorldPos.z - st.z) < 4.8);
+                const nearTable = STATIONS.find(st => Math.hypot(cargoWorldPos.x - st.x, cargoWorldPos.z - st.z) < 4.5);
 
                 if (nearTable) {
-                    // إذا كانت الطاولة خاطئة: تنبيه فقط ولا تنكسر الطاولة
                     if (nearTable.id !== targetStation.id) {
                         showAlert(`⚠️ هذه الطاولة غير صحيحة! هذا (${nearTable.shortName})، بينما المطلوب هو (${targetStation.shortName}).`, "#ff5252");
                         return;
                     }
 
-                    // التحقق من الارتفاع المناسب للإنزال
-                    const tableTopY = nearTable.height;
-                    const dropHeightDiff = cargoWorldPos.y - 1.6 - tableTopY;
+                    // التحقق من ارتفاع قاع الحاوية بالنسبة لسطح الطاولة
+                    const cargoBottomY = cargoWorldPos.y - CONTAINER_DIMS.height / 2;
+                    const tableTopY = TABLE_DIMS.height;
+                    const dropDiff = cargoBottomY - tableTopY;
 
-                    if (dropHeightDiff > 1.0) {
-                        showAlert("⚠️ الارتفاع عالٍ جداً! اخفض الذراع بهدوء لتستقر الحاوية فوق الطاولة دون صدمها.");
+                    if (dropDiff > 1.2) {
+                        showAlert("⚠️ الارتفاع عالٍ! اخفض الذراع بهدوء حتى يلامس قاع الحاوية سطح الطاولة.");
                         return;
                     }
 
-                    // إنزال طبقي فيزيائي دقيق فوق سطح الطاولة
+                    // إنزال طبقي حقيقي فوق سطح الطاولة تماماً (Surface-to-Surface Contact)
                     scene.attach(cargoBox);
-                    cargoBox.position.set(nearTable.x, nearTable.height + 1.6, nearTable.z); // تستقر فوق السطح تماماً
+                    cargoBox.position.set(nearTable.x, TABLE_DIMS.height + CONTAINER_DIMS.height / 2, nearTable.z);
                     cargoBox.rotation.set(0, 0, 0);
 
                     isCargoLocked = false;
@@ -663,13 +677,13 @@
                     audio.playVictory();
                     document.getElementById('win-modal').style.display = 'block';
                 } else {
-                    // إنزال على الأرض
+                    // إنزال على الأرض (يجب أن يكون الارتفاع منخفضاً)
                     if (boomHeight > 1.0) {
                         showAlert("⚠️ اخفض الذراع أولاً لملامسة الأرض قبل فك الأقفال.");
                         return;
                     }
                     scene.attach(cargoBox);
-                    cargoBox.position.y = 1.6;
+                    cargoBox.position.y = CONTAINER_DIMS.height / 2;
                     isCargoLocked = false;
                     audio.playTwistlock(false);
                     showAlert("🔓 تم فك الأقفال وإنزال الحاوية على الأرض.");
