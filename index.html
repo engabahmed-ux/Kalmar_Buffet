@@ -83,6 +83,7 @@
             position: relative; pointer-events: auto;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            touch-action: none;
         }
         #joystick-thumb {
             width: 50px; height: 50px; border-radius: 50%;
@@ -175,7 +176,7 @@
     <div id="alert-box">⚠️ تنبيه</div>
 
     <div id="controls-wrapper">
-        <!-- الجوي ستيك اللمسي الافتراضي للموبايل -->
+        <!-- الجوي ستيك للموبايل -->
         <div id="joystick-zone">
             <div id="joystick-thumb"></div>
         </div>
@@ -198,14 +199,8 @@
     </div>
 
     <script>
-        // ==============================================
-        // رابط Google Apps Script المباشر
-        // ==============================================
         const GOOGLE_SCRIPT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxMdn6VTwgqe76SrjjdFxCCH-CxOfAuBfPV9s4fGxa6xrk54qs_0sRMwyEvGZ8tVCvkkw/exec";
 
-        // ==============================================
-        // 1. نظام الصوت الصناعي
-        // ==============================================
         class KalmarHeavyAudio {
             constructor() {
                 this.ctx = null;
@@ -312,9 +307,6 @@
         }
         const audio = new KalmarHeavyAudio();
 
-        // ==============================================
-        // 2. إعداد المشهد والمقاييس الهندسية
-        // ==============================================
         let scene, camera, renderer;
         let vehicle, boomPivot, boomOuter, boomInner, spreaderGroup, cargoBox;
         let leftCylGroup, rightCylGroup, leftPistonRod, rightPistonRod;
@@ -348,7 +340,7 @@
             targetStation = STATIONS.find(s => s.id === id);
             document.getElementById('selected-drink-txt').innerText = targetStation.name;
             document.getElementById('menu-modal').style.display = 'none';
-            showAlert(`استخدم الأسهم/W-A-S-D للقيادة و [R]/[F] للرفع والخفض، ثم سلّم إلى: ${targetStation.name}`, "#ffca28");
+            showAlert(`استخدم W/S/A/D أو الأسهم للقيادة، و [R]/[F] للرفع والخفض، ووصل إلى: ${targetStation.name}`, "#ffca28");
         }
 
         function showAlert(msg, color = "#ff9800") {
@@ -360,11 +352,10 @@
             box.timer = setTimeout(() => { box.style.display = 'none'; }, 3600);
         }
 
-        // إرسال الطلب إلى Google Sheets
         function sendOrderToGoogleSheet(drinkName) {
             const statusEl = document.getElementById('sheet-status');
             const pureDrink = drinkName.replace(/^طاولة\s*\d+\s*:\s*/i, "").replace(/^قسم\s*/i, "").trim();
-            const targetUrl = `${https://script.google.com/macros/s/AKfycbwkrgPp5Y9qg1acupbvnmbORx4rJObHTmOaLZf5jl5PK1alm7_M0mnV1iUEQmlTYyMxfg/exec}?drink=${encodeURIComponent(pureDrink)}`;
+            const targetUrl = `${GOOGLE_SCRIPT_WEBAPP_URL}?drink=${encodeURIComponent(pureDrink)}`;
 
             fetch(targetUrl, { method: "GET", mode: "no-cors" })
             .then(() => {
@@ -406,7 +397,6 @@
             buildRealisticKalmarReachstacker();
             setupVirtualJoystick();
 
-            // دعم الماوس للاب توب وتدوير الكاميرا
             container.addEventListener('mousedown', e => {
                 isDraggingCam = true;
                 prevMousePos = { x: e.clientX, y: e.clientY };
@@ -421,7 +411,6 @@
             });
             window.addEventListener('mouseup', () => isDraggingCam = false);
 
-            // دعم الكيبورد للاب توب
             window.addEventListener('keydown', e => {
                 audio.init();
                 const k = e.key.toLowerCase();
@@ -448,7 +437,6 @@
                 if (k === 'g' || k === 'ل') keys.teleIn = false;
             });
 
-            // دعم اللمس والأزرار
             const setupTouchBtn = (id, keyName) => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -464,7 +452,6 @@
             animate();
         }
 
-        // الجوي ستيك اللمسي للموبايل فقط
         function setupVirtualJoystick() {
             const zone = document.getElementById('joystick-zone');
             const thumb = document.getElementById('joystick-thumb');
