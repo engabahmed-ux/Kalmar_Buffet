@@ -83,7 +83,6 @@
             position: relative; pointer-events: auto;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-            touch-action: none;
         }
         #joystick-thumb {
             width: 50px; height: 50px; border-radius: 50%;
@@ -334,13 +333,14 @@
         let prevMousePos = { x: 0, y: 0 };
         let camOrbitYaw = 0;
         let camOrbitPitch = 0;
+        let currentZoomDist = 26; // مسافة الكاميرا للزووم
 
         function selectDrink(id) {
             audio.init();
             targetStation = STATIONS.find(s => s.id === id);
             document.getElementById('selected-drink-txt').innerText = targetStation.name;
             document.getElementById('menu-modal').style.display = 'none';
-            showAlert(`استخدم W/S/A/D أو الأسهم للقيادة، و [R]/[F] للرفع والخفض، ووصل إلى: ${targetStation.name}`, "#ffca28");
+            showAlert(`اسحب بإصبعك على الشاشة لتحريك الكاميرا لرؤية الطريق والشوكة، ثم سلّم إلى: ${targetStation.name}`, "#ffca28");
         }
 
         function showAlert(msg, color = "#ff9800") {
@@ -349,7 +349,7 @@
             box.style.borderColor = color;
             box.style.display = 'block';
             clearTimeout(box.timer);
-            box.timer = setTimeout(() => { box.style.display = 'none'; }, 3600);
+            box.timer = setTimeout(() => { box.style.display = 'none'; }, 4000);
         }
 
         function sendOrderToGoogleSheet(drinkName) {
@@ -396,21 +396,9 @@
             buildCargoContainer();
             buildRealisticKalmarReachstacker();
             setupVirtualJoystick();
+            setupCameraControls(container);
 
-            container.addEventListener('mousedown', e => {
-                isDraggingCam = true;
-                prevMousePos = { x: e.clientX, y: e.clientY };
-            });
-            window.addEventListener('mousemove', e => {
-                if (!isDraggingCam) return;
-                const deltaX = e.clientX - prevMousePos.x;
-                const deltaY = e.clientY - prevMousePos.y;
-                camOrbitYaw -= deltaX * 0.006;
-                camOrbitPitch = Math.max(-0.4, Math.min(0.6, camOrbitPitch + deltaY * 0.005));
-                prevMousePos = { x: e.clientX, y: e.clientY };
-            });
-            window.addEventListener('mouseup', () => isDraggingCam = false);
-
+            // دعم الكيبورد للاب توب
             window.addEventListener('keydown', e => {
                 audio.init();
                 const k = e.key.toLowerCase();
@@ -450,6 +438,80 @@
 
             window.addEventListener('resize', onWindowResize);
             animate();
+        }
+
+        // ==============================================
+        // 3. تحكم الشاشة والكاميرا (سحب للتدوير + زووم Pinch)
+        // ==============================================
+        function setupCameraControls(container) {
+            let lastTouchX = 0;
+            let lastTouchY = 0;
+            let initialPinchDist = null;
+
+            container.addEventListener('mousedown', e => {
+                if(e.target.closest('#controls-wrapper') || e.target.closest('#hud')) return;
+                isDraggingCam = true;
+                prevMousePos = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('mousemove', e => {
+                if (!isDraggingCam) return;
+                const deltaX = e.clientX - prevMousePos.x;
+                const deltaY = e.clientY - prevMousePos.y;
+                camOrbitYaw -= deltaX * 0.006;
+                camOrbitPitch = Math.max(-0.5, Math.min(0.7, camOrbitPitch + deltaY * 0.005));
+                prevMousePos = { x: e.clientX, y: e.clientY };
+            });
+
+            window.addEventListener('mouseup', () => isDraggingCam = false);
+
+            // دعم اللمس للإصبع الواحد (تدوير الكاميرا) وإصبعين (زووم In / Out)
+            container.addEventListener('touchstart', e => {
+                if(e.target.closest('#controls-wrapper') || e.target.closest('#joystick-zone')) return;
+                
+                if (e.touches.length === 1) {
+                    isDraggingCam = true;
+                    lastTouchX = e.touches[0].clientX;
+                    lastTouchY = e.touches[0].clientY;
+                } else if (e.touches.length === 2) {
+                    isDraggingCam = false;
+                    initialPinchDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                }
+            }, { passive: true });
+
+            container.addEventListener('touchmove', e => {
+                if (e.target.closest('#joystick-zone')) return;
+
+                if (isDraggingCam && e.touches.length === 1) {
+                    const deltaX = e.touches[0].clientX - lastTouchX;
+                    const deltaY = e.touches[0].clientY - lastTouchY;
+                    camOrbitYaw -= deltaX * 0.006;
+                    camOrbitPitch = Math.max(-0.5, Math.min(0.7, camOrbitPitch + deltaY * 0.005));
+                    lastTouchX = e.touches[0].clientX;
+                    lastTouchY = e.touches[0].clientY;
+                } else if (e.touches.length === 2 && initialPinchDist !== null) {
+                    const currentPinchDist = Math.hypot(
+                        e.touches[0].clientX - e.touches[1].clientX,
+                        e.touches[0].clientY - e.touches[1].clientY
+                    );
+                    const pinchDiff = initialPinchDist - currentPinchDist;
+                    currentZoomDist = Math.max(16, Math.min(45, currentZoomDist + pinchDiff * 0.05));
+                    initialPinchDist = currentPinchDist;
+                }
+            }, { passive: true });
+
+            container.addEventListener('touchend', e => {
+                if (e.touches.length < 1) isDraggingCam = false;
+                if (e.touches.length < 2) initialPinchDist = null;
+            });
+
+            // دعم عجلة الماوس للزووم على اللاب توب
+            container.addEventListener('wheel', e => {
+                currentZoomDist = Math.max(16, Math.min(45, currentZoomDist + e.deltaY * 0.02));
+            });
         }
 
         function setupVirtualJoystick() {
@@ -1069,11 +1131,10 @@
             }
 
             const totalYaw = vehicle.rotation.y + camOrbitYaw;
-            const camDist = 26;
             const camHeight = 16 + camOrbitPitch * 14;
 
-            const targetX = vehicle.position.x - Math.sin(totalYaw) * camDist;
-            const targetZ = vehicle.position.z - Math.cos(totalYaw) * camDist;
+            const targetX = vehicle.position.x - Math.sin(totalYaw) * currentZoomDist;
+            const targetZ = vehicle.position.z - Math.cos(totalYaw) * currentZoomDist;
             const targetY = vehicle.position.y + camHeight;
 
             camera.position.lerp(new THREE.Vector3(targetX, targetY, targetZ), 0.1);
