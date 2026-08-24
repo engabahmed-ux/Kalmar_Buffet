@@ -130,7 +130,7 @@
     </div>
 
     <div id="canvas-container"></div>
-    <div id="cam-hint">🖱️ اسحب الماوس لتدوير زاوية الرؤية وفحص التويستلوك</div>
+    <div id="cam-hint">🖱️ اسحب الماوس لتدوير زاوية الرؤية | الالتقاط التلقائي الذكي مفعّل</div>
 
     <div id="hud">
         <div class="hud-card">
@@ -291,9 +291,7 @@
         let targetStation = null;
         let isCargoLocked = false;
         
-        // زاوية الذراع الرأسية: تبدأ من 0.0 (وضع التقاط الحاوية الأفقي) وتصل لـ 0.52 راديان (مرتفعة لأعلى)
         let boomAngle = 0.0;
-        // طول امتداد التلسكوب
         let teleExtend = 0.0;
 
         const CONTAINER_DIMS = { width: 6.1, height: 2.6, depth: 2.4 };
@@ -317,7 +315,7 @@
             targetStation = STATIONS.find(s => s.id === id);
             document.getElementById('selected-drink-txt').innerText = targetStation.name;
             document.getElementById('menu-modal').style.display = 'none';
-            showAlert(`اضغط [R] لرفع الذراع للأعلى و[F] للخفض للأسفل، ثم توجه إلى: ${targetStation.name}`, "#ffca28");
+            showAlert(`قرّب الماسكة فوق الحاوية وسيتم القفل التلقائي الذكي فوراً! ثم توجه إلى: ${targetStation.name}`, "#ffca28");
         }
 
         function showAlert(msg, color = "#ff9800") {
@@ -528,7 +526,7 @@
         }
 
         // ==============================================
-        // 4. بناء هيكل الونش وميكانيزم البساتم الحقيقي
+        // 4. بناء الونش والميكانيزم
         // ==============================================
         function buildRealisticKalmarReachstacker() {
             vehicle = new THREE.Group();
@@ -550,7 +548,7 @@
             cw.castShadow = true;
             vehicle.add(cw);
 
-            // 3. الأبراج الخلفية الحاملة للمفصل الرئيسي
+            // 3. الأبراج الخلفية
             const rearTower = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.6, 1.8), redMat);
             rearTower.position.set(0, 3.8, -3.8);
             rearTower.castShadow = true;
@@ -572,11 +570,11 @@
                 vehicle.add(w);
             });
 
-            // 6. مفصل الذراع الخلفي في أعلى البرج
+            // 6. مفصل الذراع الخلفي
             boomPivot = new THREE.Group();
             boomPivot.position.set(0, 4.8, -4.0);
 
-            // الذراع الخارجي (يمتد للأمام في اتجاه +Z المحلي)
+            // الذراع الخارجي
             boomOuter = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 11.0), darkMat);
             boomOuter.position.set(0, 0, 5.5);
             boomOuter.castShadow = true;
@@ -591,7 +589,7 @@
             innerArmMesh.castShadow = true;
             boomInner.add(innerArmMesh);
 
-            // نقاط اتصال البساتم على جانبي الذراع
+            // نقاط اتصال البساتم
             leftBoomAttach = new THREE.Group();
             leftBoomAttach.position.set(-1.4, -0.6, 6.0);
             boomPivot.add(leftBoomAttach);
@@ -600,7 +598,7 @@
             rightBoomAttach.position.set(1.4, -0.6, 6.0);
             boomPivot.add(rightBoomAttach);
 
-            // 7. الماسك (Top-Lift Spreader) المعلق في مقدمة الذراع
+            // 7. الماسك (Top-Lift Spreader)
             spreaderGroup = new THREE.Group();
             spreaderGroup.position.set(0, -0.6, 8.5);
 
@@ -646,12 +644,9 @@
             boomPivot.add(boomInner);
             vehicle.add(boomPivot);
 
-            // ==============================================
             // 8. أسطوانات وبساتم الرفع الموازية للشاسيه
-            // ==============================================
-            // أسطوانة الرفع اليسرى
             leftCylGroup = new THREE.Group();
-            leftCylGroup.position.set(-1.4, 2.3, 2.2); // مثبتة على الشاسيه يسار الكابينة
+            leftCylGroup.position.set(-1.4, 2.3, 2.2);
             
             const leftBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 4.2, 16), darkMat);
             leftBarrel.position.z = 2.1;
@@ -664,9 +659,8 @@
             leftCylGroup.add(leftPistonRod);
             vehicle.add(leftCylGroup);
 
-            // أسطوانة الرفع اليمنى
             rightCylGroup = new THREE.Group();
-            rightCylGroup.position.set(1.4, 2.3, 2.2); // مثبتة على الشاسيه يمين الكابينة
+            rightCylGroup.position.set(1.4, 2.3, 2.2);
             
             const rightBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 4.2, 16), darkMat);
             rightBarrel.position.z = 2.1;
@@ -684,10 +678,9 @@
         }
 
         // ==============================================
-        // 5. تحديث حركة البساتم وتوجيهها الثابت السلس
+        // 5. تحديث حركة البساتم الهيدروليكية
         // ==============================================
         function updateHydraulicPistons() {
-            // تتبع الأسطوانة اليسرى
             const leftAttachWorld = new THREE.Vector3();
             leftBoomAttach.getWorldPosition(leftAttachWorld);
 
@@ -695,11 +688,9 @@
             leftCylGroup.getWorldPosition(leftBaseWorld);
             const distLeft = leftBaseWorld.distanceTo(leftAttachWorld);
 
-            // توجيه مستقيم نحو نقطة الارتكاز بالذراع دون أي دوران جانبي
             leftCylGroup.lookAt(leftAttachWorld);
             leftPistonRod.position.z = distLeft - 1.2;
 
-            // تتبع الأسطوانة اليمنى
             const rightAttachWorld = new THREE.Vector3();
             rightBoomAttach.getWorldPosition(rightAttachWorld);
 
@@ -755,6 +746,41 @@
             return false;
         }
 
+        // ==============================================
+        // 6. المساعدة الذكية في الالتقاط التلقائي فور الوصول للشكل المطلوب
+        // ==============================================
+        function checkAutoLockProximity() {
+            if (isCargoLocked || !targetStation) return;
+
+            const spreaderWorldPos = new THREE.Vector3();
+            spreaderGroup.getWorldPosition(spreaderWorldPos);
+
+            const cargoWorldPos = new THREE.Vector3();
+            cargoBox.getWorldPosition(cargoWorldPos);
+
+            const horizDist = Math.hypot(spreaderWorldPos.x - cargoWorldPos.x, spreaderWorldPos.z - cargoWorldPos.z);
+            const heightDiff = Math.abs(spreaderWorldPos.y - (cargoWorldPos.y + CONTAINER_DIMS.height / 2 + 0.4));
+
+            // عند الوصول للمحاذاة الموضحة بالصورة المرفقة (فوق الحاوية مباشرة) يتم القفل التلقائي الذكي فوراً
+            if (horizDist < 2.0 && heightDiff < 0.75) {
+                lockContainer();
+            }
+        }
+
+        function lockContainer() {
+            if (isCargoLocked) return;
+
+            twistlockPins.forEach(pin => pin.rotation.y = Math.PI / 2);
+
+            spreaderGroup.attach(cargoBox);
+            cargoBox.position.set(0, -CONTAINER_DIMS.height / 2 - 0.4, 0);
+            cargoBox.rotation.set(0, 0, 0);
+
+            isCargoLocked = true;
+            audio.playTwistlock(true);
+            showAlert(`🔒 تم القفل التلقائي الذكي للتويستلوك بنجاح! ارفع الذراع وتوجه إلى: ${targetStation.name}`, "#00e676");
+        }
+
         let speed = 0;
         let steer = 0;
 
@@ -780,11 +806,6 @@
                 speed = -speed * 0.25;
             }
 
-            // ==============================================
-            // تصحيح اتجاه الرفع والخفض:
-            // [R] أو [▲ رفع]: يرفع الذراع لأعلى (تزداد القيمة السالبة لـ rotation.x في Three.js)
-            // [F] أو [▼ خفض]: يخفض الذراع لأسفل نحو الحاوية
-            // ==============================================
             let isHyd = false;
             if (keys.liftUp && boomAngle < 0.52) {
                 boomAngle += 0.005; // رفع لأعلى
@@ -795,7 +816,6 @@
                 isHyd = true;
             }
 
-            // تمديد وتقصير التلسكوب
             if (keys.teleOut && teleExtend < 4.5) {
                 teleExtend += 0.04;
                 isHyd = true;
@@ -807,12 +827,14 @@
 
             if (isHyd) audio.playHydraulic();
 
-            // تطبيق الرفع الدقيق (في Three.js الدوران حول -X يرفع للأعلى في اتجاه +Z)
             boomPivot.rotation.x = -boomAngle;
             boomInner.position.z = 10.5 + teleExtend;
-            spreaderGroup.rotation.x = boomAngle; // استواء الماسك التلقائي
+            spreaderGroup.rotation.x = boomAngle;
 
             updateHydraulicPistons();
+
+            // فحص الالتقاط التلقائي الذكي
+            checkAutoLockProximity();
 
             audio.setEngineSpeed(speed / 0.26);
 
@@ -824,39 +846,15 @@
                 `الارتفاع: ${currentElev.toFixed(1)}m | التلسكوب: ${teleExtend.toFixed(1)}m | ${isCargoLocked ? "🔒 مقفول (Locked)" : "🔓 مفتوح"}`;
         }
 
-        // القفل والإنزال الصلب والتويستلوك
         function toggleTwistlocks() {
             if (!targetStation) return;
 
-            const spreaderWorldPos = new THREE.Vector3();
-            spreaderGroup.getWorldPosition(spreaderWorldPos);
-
-            const cargoWorldPos = new THREE.Vector3();
-            cargoBox.getWorldPosition(cargoWorldPos);
-
             if (!isCargoLocked) {
-                const horizDist = Math.hypot(spreaderWorldPos.x - cargoWorldPos.x, spreaderWorldPos.z - cargoWorldPos.z);
-                const heightDiff = Math.abs(spreaderWorldPos.y - (cargoWorldPos.y + CONTAINER_DIMS.height / 2 + 0.4));
-
-                if (horizDist > 2.8) {
-                    showAlert("⚠️ أنت بعيد! اضغط [T] لتمديد التلسكوب ووجّه الونش بحيث تتطابق الماسكة فوق الحاوية.");
-                    return;
-                }
-                if (heightDiff > 0.85) {
-                    showAlert("⚠️ الارتفاع غير مناسب! اخفض الذراع لتلامس الماسكة قمة الحاوية وتدخل المسامير في الفتحات.");
-                    return;
-                }
-
-                twistlockPins.forEach(pin => pin.rotation.y = Math.PI / 2);
-
-                spreaderGroup.attach(cargoBox);
-                cargoBox.position.set(0, -CONTAINER_DIMS.height / 2 - 0.4, 0);
-                cargoBox.rotation.set(0, 0, 0);
-
-                isCargoLocked = true;
-                audio.playTwistlock(true);
-                showAlert(`🔒 تم إدخال وقفل الـ Twistlocks بنجاح! اضغط [R] لرفع الذراع وتوجه إلى: ${targetStation.name}`, "#00e676");
+                lockContainer();
             } else {
+                const cargoWorldPos = new THREE.Vector3();
+                cargoBox.getWorldPosition(cargoWorldPos);
+
                 const nearTable = STATIONS.find(st => Math.hypot(cargoWorldPos.x - st.x, cargoWorldPos.z - st.z) < 4.5);
 
                 if (nearTable) {
@@ -903,7 +901,6 @@
             }
         }
 
-        // تحديث الكاميرا
         function updateCamera() {
             if (isCargoLocked) {
                 camOrbitYaw *= 0.92;
