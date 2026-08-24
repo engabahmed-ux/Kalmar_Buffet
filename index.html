@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Kabadaya Specialized Equipment - Kalmar Reachstacker Experience</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; touch-action: none; }
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { overflow: hidden; background: #080a0f; color: #fff; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; cursor: grab; }
         #canvas-container:active { cursor: grabbing; }
@@ -69,14 +69,14 @@
             text-align: center; max-width: 90vw;
         }
 
-        /* واجهة الجوي ستيك والأزرار التفاعلية للهواتف */
+        /* واجهة التحكم */
         #controls-wrapper {
             position: absolute; bottom: 14px; left: 0; right: 0;
             display: flex; justify-content: space-between; align-items: flex-end;
             padding: 0 20px; z-index: 10; pointer-events: none;
         }
 
-        /* الجوي ستيك الافتراضي (Virtual Joystick) */
+        /* الجوي ستيك للموبايل */
         #joystick-zone {
             width: 120px; height: 120px; border-radius: 50%;
             background: rgba(15, 23, 42, 0.7); border: 2px solid #38bdf8;
@@ -348,7 +348,7 @@
             targetStation = STATIONS.find(s => s.id === id);
             document.getElementById('selected-drink-txt').innerText = targetStation.name;
             document.getElementById('menu-modal').style.display = 'none';
-            showAlert(`استخدم الجوي ستيك للقيادة و [R]/[F] للرفع والخفض، ثم سلّم إلى: ${targetStation.name}`, "#ffca28");
+            showAlert(`استخدم الأسهم/W-A-S-D للقيادة و [R]/[F] للرفع والخفض، ثم سلّم إلى: ${targetStation.name}`, "#ffca28");
         }
 
         function showAlert(msg, color = "#ff9800") {
@@ -406,6 +406,7 @@
             buildRealisticKalmarReachstacker();
             setupVirtualJoystick();
 
+            // دعم الماوس للاب توب وتدوير الكاميرا
             container.addEventListener('mousedown', e => {
                 isDraggingCam = true;
                 prevMousePos = { x: e.clientX, y: e.clientY };
@@ -420,6 +421,7 @@
             });
             window.addEventListener('mouseup', () => isDraggingCam = false);
 
+            // دعم الكيبورد للاب توب
             window.addEventListener('keydown', e => {
                 audio.init();
                 const k = e.key.toLowerCase();
@@ -446,8 +448,10 @@
                 if (k === 'g' || k === 'ل') keys.teleIn = false;
             });
 
+            // دعم اللمس والأزرار
             const setupTouchBtn = (id, keyName) => {
                 const el = document.getElementById(id);
+                if (!el) return;
                 const start = (e) => { e.stopPropagation(); audio.init(); keys[keyName] = true; el.classList.add('active'); };
                 const end = (e) => { e.stopPropagation(); keys[keyName] = false; el.classList.remove('active'); };
                 el.addEventListener('mousedown', start); el.addEventListener('mouseup', end);
@@ -460,6 +464,7 @@
             animate();
         }
 
+        // الجوي ستيك اللمسي للموبايل فقط
         function setupVirtualJoystick() {
             const zone = document.getElementById('joystick-zone');
             const thumb = document.getElementById('joystick-thumb');
@@ -952,16 +957,15 @@
             if (keys.right) steerInput -= 1;
             if (Math.abs(joyVector.x) > 0.05) steerInput = -joyVector.x;
 
-            // تم تخفيض معاملات السرعة والتوجيه خصيصاً للهواتف لتصبح الحركة سلسة وغير سريعة جداً
-            if (moveInput > 0.05) speed = Math.min(speed + 0.01 * moveInput, 0.18);
-            else if (moveInput < -0.05) speed = Math.max(speed + 0.01 * moveInput, -0.11);
-            else speed *= 0.85;
+            if (moveInput > 0.05) speed = Math.min(speed + 0.015 * moveInput, 0.22);
+            else if (moveInput < -0.05) speed = Math.max(speed + 0.015 * moveInput, -0.14);
+            else speed *= 0.88;
 
             const isReversing = speed < -0.01 || moveInput < -0.05;
             const steerDirection = isReversing ? -1 : 1;
 
             if (Math.abs(steerInput) > 0.05) {
-                steer += 0.018 * steerInput * steerDirection;
+                steer += 0.024 * steerInput * steerDirection;
             }
 
             const nextX = vehicle.position.x + Math.sin(steer) * speed;
@@ -1004,7 +1008,7 @@
             updateHydraulicPistons();
             checkAutoLockProximity();
 
-            audio.setEngineSpeed(speed / 0.18);
+            audio.setEngineSpeed(speed / 0.22);
 
             const spreaderWorld = new THREE.Vector3();
             spreaderGroup.getWorldPosition(spreaderWorld);
