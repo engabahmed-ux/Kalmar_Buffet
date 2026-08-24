@@ -133,7 +133,7 @@
             </div>
             <div class="brand-text-block">
                 <div class="brand-main-title">Kabadaya Specialized Equipment</div>
-                <div class="brand-dealer-tags">Official Egypt Dealer: Kalmar 🇫🇮 | Terberg 🇳🇱 | Bromma 🇸🇪 | Buiscar 🇳🇱</div>
+                <div class="brand-dealer-tags">Official Egypt Dealer: KALMAR 🇫🇮 | Terberg 🇳🇱 | Bromma 🇸🇪 | Buiscar 🇳🇱</div>
             </div>
         </div>
 
@@ -175,7 +175,7 @@
     <div id="alert-box">⚠️ تنبيه</div>
 
     <div id="controls-wrapper">
-        <!-- الجوي ستيك اللمسي الافتراضي للموبايل والكمبيوتر -->
+        <!-- الجوي ستيك اللمسي الافتراضي للموبايل -->
         <div id="joystick-zone">
             <div id="joystick-thumb"></div>
         </div>
@@ -201,7 +201,7 @@
         // ==============================================
         // رابط Google Apps Script المباشر
         // ==============================================
-        const GOOGLE_SCRIPT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwjUKREkBdVAiNn2l6UZgvNQY1EoUedyppwzaYbfSDu9j_zMO524_bIPQCR5tExNrpL6w/exec";
+        const GOOGLE_SCRIPT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbxMdn6VTwgqe76SrjjdFxCCH-CxOfAuBfPV9s4fGxa6xrk54qs_0sRMwyEvGZ8tVCvkkw/exec";
 
         // ==============================================
         // 1. نظام الصوت الصناعي
@@ -363,20 +363,12 @@
         // إرسال الطلب إلى Google Sheets
         function sendOrderToGoogleSheet(drinkName) {
             const statusEl = document.getElementById('sheet-status');
-            
-            // تنظيف اسم المشروب محلياً أيضاً قبل الإرسال
             const pureDrink = drinkName.replace(/^طاولة\s*\d+\s*:\s*/i, "").replace(/^قسم\s*/i, "").trim();
+            const targetUrl = `${https://script.google.com/macros/s/AKfycbwkrgPp5Y9qg1acupbvnmbORx4rJObHTmOaLZf5jl5PK1alm7_M0mnV1iUEQmlTYyMxfg/exec}?drink=${encodeURIComponent(pureDrink)}`;
 
-            const targetUrl = `${https://script.google.com/macros/s/AKfycbxMdn6VTwgqe76SrjjdFxCCH-CxOfAuBfPV9s4fGxa6xrk54qs_0sRMwyEvGZ8tVCvkkw/exec}?drink=${encodeURIComponent(pureDrink)}`;
-
-            fetch(targetUrl, {
-                method: "GET",
-                mode: "no-cors"
-            })
+            fetch(targetUrl, { method: "GET", mode: "no-cors" })
             .then(() => {
                 statusEl.innerText = "تم ارسال طلبك للبوفيه ونتمني لك يوم رائع";
-                statusEl.style.borderColor = "#10b981";
-                statusEl.style.color = "#a7f3d0";
             })
             .catch(() => {
                 statusEl.innerText = "تم ارسال طلبك للبوفيه ونتمني لك يوم رائع";
@@ -536,13 +528,11 @@
             ctx.fillStyle = '#1f2327';
             ctx.fillRect(0, 0, 512, 128);
 
-            // مربع الشعار الأسود والأبيض
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(20, 14, 100, 100);
             ctx.fillStyle = '#000000';
             ctx.fillRect(26, 20, 88, 88);
 
-            // رسم رأس الثور لشعار كالمر
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
             ctx.arc(70, 64, 32, 0, Math.PI * 2);
@@ -554,7 +544,6 @@
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(52, 60, 12, 28);
 
-            // كتابة KALMAR بالخط الأحمر العريض
             ctx.fillStyle = '#e31b23';
             ctx.font = '900 68px Arial, sans-serif';
             ctx.fillText('KALMAR', 145, 88);
@@ -963,15 +952,16 @@
             if (keys.right) steerInput -= 1;
             if (Math.abs(joyVector.x) > 0.05) steerInput = -joyVector.x;
 
-            if (moveInput > 0.05) speed = Math.min(speed + 0.015 * moveInput, 0.26);
-            else if (moveInput < -0.05) speed = Math.max(speed + 0.015 * moveInput, -0.16);
-            else speed *= 0.88;
+            // تم تخفيض معاملات السرعة والتوجيه خصيصاً للهواتف لتصبح الحركة سلسة وغير سريعة جداً
+            if (moveInput > 0.05) speed = Math.min(speed + 0.01 * moveInput, 0.18);
+            else if (moveInput < -0.05) speed = Math.max(speed + 0.01 * moveInput, -0.11);
+            else speed *= 0.85;
 
             const isReversing = speed < -0.01 || moveInput < -0.05;
             const steerDirection = isReversing ? -1 : 1;
 
             if (Math.abs(steerInput) > 0.05) {
-                steer += 0.028 * steerInput * steerDirection;
+                steer += 0.018 * steerInput * steerDirection;
             }
 
             const nextX = vehicle.position.x + Math.sin(steer) * speed;
@@ -1014,7 +1004,7 @@
             updateHydraulicPistons();
             checkAutoLockProximity();
 
-            audio.setEngineSpeed(speed / 0.26);
+            audio.setEngineSpeed(speed / 0.18);
 
             const spreaderWorld = new THREE.Vector3();
             spreaderGroup.getWorldPosition(spreaderWorld);
@@ -1061,7 +1051,6 @@
                     audio.playTwistlock(false);
                     audio.playVictory();
 
-                    // إرسال الطلب إلى Google Sheets
                     sendOrderToGoogleSheet(targetStation.name);
                     document.getElementById('win-modal').style.display = 'block';
                 } else {
