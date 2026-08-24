@@ -367,7 +367,7 @@
             // تنظيف اسم المشروب محلياً أيضاً قبل الإرسال
             const pureDrink = drinkName.replace(/^طاولة\s*\d+\s*:\s*/i, "").replace(/^قسم\s*/i, "").trim();
 
-            const targetUrl = `${GOOGLE_SCRIPT_WEBAPP_URL}?drink=${encodeURIComponent(pureDrink)}`;
+            const targetUrl = `${https://script.google.com/macros/s/AKfycbxMdn6VTwgqe76SrjjdFxCCH-CxOfAuBfPV9s4fGxa6xrk54qs_0sRMwyEvGZ8tVCvkkw/exec}?drink=${encodeURIComponent(pureDrink)}`;
 
             fetch(targetUrl, {
                 method: "GET",
