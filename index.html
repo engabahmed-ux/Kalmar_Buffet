@@ -116,8 +116,8 @@
         }
         .sheet-badge {
             background: rgba(16, 185, 129, 0.2); border: 1px solid #10b981;
-            padding: 8px 16px; border-radius: 8px; font-size: 13px; color: #a7f3d0;
-            margin: 12px 0; display: inline-block; font-weight: bold;
+            padding: 10px 18px; border-radius: 8px; font-size: 14px; color: #a7f3d0;
+            margin: 14px 0; display: inline-block; font-weight: bold;
         }
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -192,16 +192,14 @@
 
     <div id="win-modal">
         <h2 style="color: #00e676; margin-bottom: 8px;">🎉 إتقان تام وهبوط سلس!</h2>
-        <p style="color: #cfd8dc; font-size: 14px;">تم إنزال الحاوية وتثبيتها بدقة تامة فوق سطح الطاولة الصحيحة.<br>أهلاً بك في ضيافة <b>Kabadaya Specialized Equipment</b>!</p>
-        <div class="sheet-badge" id="sheet-status">📊 جاري تسجيل الطلب في جدول Google Sheets...</div>
+        <div class="sheet-badge" id="sheet-status">تم ارسال طلبك للبوفيه ونتمني لك يوم رائع</div>
         <br>
         <button class="ctrl-btn" style="padding: 9px 24px; margin: 10px auto 0; font-size: 15px; background: #00e676; color: #000; border: none;" onclick="location.reload()">طلب مشروب آخر 🔄</button>
     </div>
 
     <script>
         // ==============================================
-        // رابط Web App الخاص بـ Google Apps Script
-        // الصق الرابط الذي حصلت عليه بعد عمل Deploy هنا
+        // رابط Google Apps Script المباشر
         // ==============================================
         const GOOGLE_SCRIPT_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbwjUKREkBdVAiNn2l6UZgvNQY1EoUedyppwzaYbfSDu9j_zMO524_bIPQCR5tExNrpL6w/exec";
 
@@ -338,7 +336,7 @@
         ];
 
         const keys = { up: false, down: false, left: false, right: false, liftUp: false, liftDown: false, teleOut: false, teleIn: false };
-        let joyVector = { x: 0, y: 0 }; // مدخلات الجوي ستيك
+        let joyVector = { x: 0, y: 0 };
 
         let isDraggingCam = false;
         let prevMousePos = { x: 0, y: 0 };
@@ -362,32 +360,23 @@
             box.timer = setTimeout(() => { box.style.display = 'none'; }, 3600);
         }
 
-        // إرسال الطلب إلى Google Sheets عبر Apps Script Web App
-        function sendOrderToGoogleSheet(drinkName, tableName) {
+        // إرسال الطلب إلى Google Sheets
+        function sendOrderToGoogleSheet(drinkName) {
             const statusEl = document.getElementById('sheet-status');
             
-            if (GOOGLE_SCRIPT_WEBAPP_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEBAPP_URL_HERE") {
-                statusEl.innerText = "✅ تم تسجيل الطلب محلياً (ضع رابط Web App لإرساله للجدول مباشرة)";
-                return;
-            }
-
             fetch(GOOGLE_SCRIPT_WEBAPP_URL, {
                 method: "POST",
                 mode: "no-cors",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    drink: drinkName,
-                    table: tableName,
-                    time: new Date().toISOString()
+                    drink: drinkName
                 })
             })
             .then(() => {
-                statusEl.innerText = "✅ تم تسجيل الطلب بنجاح في جدول Google Sheets!";
-                statusEl.style.borderColor = "#10b981";
-                statusEl.style.color = "#a7f3d0";
+                statusEl.innerText = "تم ارسال طلبك للبوفيه ونتمني لك يوم رائع";
             })
             .catch(() => {
-                statusEl.innerText = "✅ تم حفظ الطلب بنجاح!";
+                statusEl.innerText = "تم ارسال طلبك للبوفيه ونتمني لك يوم رائع";
             });
         }
 
@@ -422,7 +411,6 @@
             buildRealisticKalmarReachstacker();
             setupVirtualJoystick();
 
-            // تدوير الكاميرا عند سحب الشاشة
             container.addEventListener('mousedown', e => {
                 isDraggingCam = true;
                 prevMousePos = { x: e.clientX, y: e.clientY };
@@ -437,7 +425,6 @@
             });
             window.addEventListener('mouseup', () => isDraggingCam = false);
 
-            // أزرار الكيبورد
             window.addEventListener('keydown', e => {
                 audio.init();
                 const k = e.key.toLowerCase();
@@ -478,9 +465,6 @@
             animate();
         }
 
-        // ==============================================
-        // 3. كود الجوي ستيك اللمسي الذكي (Touch Joystick)
-        // ==============================================
         function setupVirtualJoystick() {
             const zone = document.getElementById('joystick-zone');
             const thumb = document.getElementById('joystick-thumb');
@@ -502,8 +486,8 @@
                 }
 
                 thumb.style.transform = `translate(${dx}px, ${dy}px)`;
-                joyVector.x = dx / maxRadius;  // من -1 (يسار) إلى +1 (يمين)
-                joyVector.y = -dy / maxRadius; // من -1 (خلف) إلى +1 (أمام)
+                joyVector.x = dx / maxRadius;
+                joyVector.y = -dy / maxRadius;
             }
 
             function resetJoystick() {
@@ -549,11 +533,13 @@
             ctx.fillStyle = '#1f2327';
             ctx.fillRect(0, 0, 512, 128);
 
+            // مربع الشعار الأسود والأبيض
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(20, 14, 100, 100);
             ctx.fillStyle = '#000000';
             ctx.fillRect(26, 20, 88, 88);
 
+            // رسم رأس الثور لشعار كالمر
             ctx.fillStyle = '#ffffff';
             ctx.beginPath();
             ctx.arc(70, 64, 32, 0, Math.PI * 2);
@@ -565,6 +551,7 @@
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(52, 60, 12, 28);
 
+            // كتابة KALMAR بالخط الأحمر العريض
             ctx.fillStyle = '#e31b23';
             ctx.font = '900 68px Arial, sans-serif';
             ctx.fillText('KALMAR', 145, 88);
@@ -963,7 +950,6 @@
         function updateVehicle() {
             if (!targetStation) return;
 
-            // دمج مدخلات الكيبورد والجوي ستيك اللمسي
             let moveInput = 0;
             if (keys.up) moveInput += 1;
             if (keys.down) moveInput -= 1;
@@ -1023,7 +1009,6 @@
             spreaderGroup.rotation.x = boomAngle;
 
             updateHydraulicPistons();
-
             checkAutoLockProximity();
 
             audio.setEngineSpeed(speed / 0.26);
@@ -1074,8 +1059,7 @@
                     audio.playVictory();
 
                     // إرسال الطلب إلى Google Sheets
-                    sendOrderToGoogleSheet(targetStation.name, targetStation.shortName);
-
+                    sendOrderToGoogleSheet(targetStation.name);
                     document.getElementById('win-modal').style.display = 'block';
                 } else {
                     const spreaderWorld = new THREE.Vector3();
