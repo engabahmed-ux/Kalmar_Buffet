@@ -3,520 +3,287 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Kalmar Reachstacker - محاكي ضيافة كالمر</title>
+    <title>Kalmar Reachstacker - لعبة بوفيه كالمر</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        body { overflow: hidden; background: #0a0d14; color: #fff; }
-        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        body { background: #11141a; color: #fff; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        #game-canvas { background: #262c36; border: 3px solid #d31b23; border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); max-width: 98vw; max-height: 75vh; }
+        
+        /* واجهة التعليمات العلوية */
+        #hud { position: absolute; top: 12px; left: 20px; right: 20px; display: flex; justify-content: space-between; pointer-events: none; z-index: 10; }
+        .hud-card { background: rgba(15, 20, 30, 0.9); border: 2px solid #d31b23; border-radius: 10px; padding: 8px 18px; pointer-events: auto; }
+        .hud-title { font-size: 11px; color: #aaa; }
+        .hud-val { font-size: 16px; font-weight: bold; color: #ffeb3b; }
 
-        /* الشاشات والواجهات */
-        #hud {
-            position: absolute; top: 15px; left: 15px; right: 15px;
-            display: flex; justify-content: space-between; gap: 15px; pointer-events: none; z-index: 10;
-        }
-        .hud-card {
-            background: rgba(15, 20, 30, 0.88);
-            border: 2px solid #d31b23;
-            border-radius: 14px;
-            padding: 12px 20px;
-            backdrop-filter: blur(8px);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-            pointer-events: auto;
-        }
-        .hud-title { font-size: 11px; color: #9aa7b5; letter-spacing: 1px; }
-        .hud-val { font-size: 18px; font-weight: bold; color: #ffd54f; margin-top: 4px; }
-        .badge {
-            display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: bold; margin-top: 4px;
-        }
-        .badge-wait { background: #ff9800; color: #000; }
-        .badge-ready { background: #00e676; color: #000; }
+        /* أزرار اللمس والتحكم */
+        #touch-controls { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: space-between; align-items: center; padding: 0 25px; z-index: 10; pointer-events: none; }
+        .dpad { display: grid; grid-template-columns: repeat(3, 58px); grid-template-rows: repeat(2, 58px); gap: 6px; pointer-events: auto; }
+        .btn { background: #1e2638; border: 2px solid #3e4d66; color: #fff; font-size: 22px; font-weight: bold; border-radius: 10px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .btn:active, .btn.active { background: #d31b23; border-color: #ff5252; transform: scale(0.92); }
+        
+        #action-btn { width: 140px; height: 65px; border-radius: 14px; background: #d31b23; border: 2px solid #ff5252; color: #fff; font-size: 15px; font-weight: bold; cursor: pointer; pointer-events: auto; }
+        #action-btn:active { background: #99141a; transform: scale(0.92); }
 
-        /* أزرار التحكم السهلة على الشاشة (تعمل بالماوس أو اللمس أو الكيبورد) */
-        #touch-controls {
-            position: absolute; bottom: 20px; left: 0; right: 0;
-            display: flex; justify-content: space-between; align-items: flex-end;
-            padding: 0 25px; pointer-events: none; z-index: 10;
-        }
-        .dpad-container {
-            display: grid; grid-template-columns: repeat(3, 65px); grid-template-rows: repeat(2, 65px);
-            gap: 8px; pointer-events: auto;
-        }
-        .ctrl-btn {
-            background: rgba(25, 32, 45, 0.9);
-            border: 2px solid #3e4d66;
-            color: #fff; font-size: 20px; font-weight: bold;
-            border-radius: 12px; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: all 0.1s; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-        }
-        .ctrl-btn:active, .ctrl-btn.pressed {
-            background: #d31b23; border-color: #ff5252; transform: scale(0.92);
-        }
-
-        /* الزر الرئيسي التفاعلي (التقاط / إنزال) */
-        #action-btn-container {
-            display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: auto;
-        }
-        #big-action-btn {
-            width: 140px; height: 65px; border-radius: 14px;
-            background: linear-gradient(135deg, #d31b23, #b71c1c);
-            border: 2px solid #ff5252; color: #fff; font-size: 16px; font-weight: bold;
-            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;
-            box-shadow: 0 6px 20px rgba(211, 27, 35, 0.5); transition: 0.15s;
-        }
-        #big-action-btn:active { transform: scale(0.94); background: #99141a; }
-
-        /* زر تبديل الكاميرا */
-        #cam-btn {
-            position: absolute; top: 85px; left: 15px; pointer-events: auto; z-index: 10;
-            background: rgba(15, 20, 30, 0.85); border: 1px solid #556;
-            color: #eee; padding: 8px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
-        }
-
-        /* نافذة الفوز والانتصار */
-        #win-modal {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(15, 22, 32, 0.98); border: 3px solid #00e676;
-            border-radius: 18px; padding: 30px 45px; text-align: center; color: #fff;
-            display: none; z-index: 20; box-shadow: 0 10px 50px rgba(0, 230, 118, 0.4);
-            animation: pop 0.3s ease-out;
-        }
-        @keyframes pop { 0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; } 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; } }
-        #win-modal h2 { color: #00e676; font-size: 28px; margin-bottom: 8px; }
-        #win-modal p { color: #cfd8dc; font-size: 16px; margin-bottom: 20px; line-height: 1.6; }
-        #restart-btn {
-            background: #00e676; color: #000; font-size: 16px; font-weight: bold;
-            border: none; padding: 10px 30px; border-radius: 8px; cursor: pointer;
-        }
+        #win-modal { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #111a24; border: 3px solid #00e676; border-radius: 16px; padding: 25px 40px; text-align: center; display: none; z-index: 30; }
     </style>
-    <!-- مكتبة Three.js ثلاثية الأبعاد -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-    <div id="canvas-container"></div>
-
     <div id="hud">
         <div class="hud-card">
-            <div class="hud-title">🎯 طلب المشروب المطلوب للضيف</div>
-            <div class="hud-val" id="target-text">طاولة رقم 2: بوفيه العصائر الطازجة والموهيتو</div>
+            <div class="hud-title">🍹 طلب المشروب المطلوب</div>
+            <div class="hud-val">طاولة 2: ركن العصائر والموهيتو (الخضراء)</div>
         </div>
         <div class="hud-card" style="text-align: center;">
-            <div class="hud-title">حالة حاوية البوفيه</div>
-            <div id="status-badge" class="badge badge-wait">توجّه نحو الحاوية لالتقاطها</div>
+            <div class="hud-title">حالة الحاوية</div>
+            <div class="hud-val" id="status-text" style="color: #ff9800;">اقترب من الحاوية لالتقاطها</div>
         </div>
     </div>
 
-    <button id="cam-btn" onclick="toggleCamera()">🎥 تبديل الكاميرا (خارجي / كابينة)</button>
+    <canvas id="game-canvas" width="900" height="600"></canvas>
 
     <div id="touch-controls">
-        <!-- أزرار التوجيه والحركة السهلة -->
-        <div class="dpad-container">
+        <div class="dpad">
             <div></div>
-            <button class="ctrl-btn" id="btn-up" onmousedown="press('up')" onmouseup="release('up')" ontouchstart="press('up')" ontouchend="release('up')">▲</button>
+            <button class="btn" id="b-up">▲</button>
             <div></div>
-            <button class="ctrl-btn" id="btn-left" onmousedown="press('left')" onmouseup="release('left')" ontouchstart="press('left')" ontouchend="release('left')">◀</button>
-            <button class="ctrl-btn" id="btn-down" onmousedown="press('down')" onmouseup="release('down')" ontouchstart="press('down')" ontouchend="release('down')">▼</button>
-            <button class="ctrl-btn" id="btn-right" onmousedown="press('right')" onmouseup="release('right')" ontouchstart="press('right')" ontouchend="release('right')">▶</button>
+            <button class="btn" id="b-left">◀</button>
+            <button class="btn" id="b-down">▼</button>
+            <button class="btn" id="b-right">▶</button>
         </div>
 
-        <!-- زر تفاعلي واحد ذكي للتحكم في الحاوية -->
-        <div id="action-btn-container">
-            <button id="big-action-btn" onclick="handleActionButton()">
-                <span>📦</span> <span id="action-btn-text">التقاط الحاوية</span>
-            </button>
-            <div style="font-size: 11px; color: #889;">أو اضغط زر [المسافة / Space]</div>
-        </div>
+        <button id="action-btn" onclick="triggerAction()">📦 التقاط الحاوية</button>
     </div>
 
-    <!-- نافذة الفوز -->
     <div id="win-modal">
-        <h2>🎉 تم تسليم طلب المشروبات بنجاح!</h2>
-        <p>تم إنزال حاوية الضيافة بدقة تامة فوق طاولة المشروبات الصحيحة.<br>أهلاً بك في ضيافة شركة كالمر، استمتع بمشروبك!</p>
-        <button id="restart-btn" onclick="location.reload()">إعادة التحدي 🔄</button>
+        <h2 style="color: #00e676; margin-bottom: 8px;">🎉 تم تسليم الطلب بنجاح!</h2>
+        <p style="color: #ddd; margin-bottom: 15px;">استمتع بمشروبك في ضيافة شركة كالمر!</p>
+        <button class="btn" style="padding: 8px 20px; margin: 0 auto; font-size: 15px; background: #00e676; color: #000;" onclick="location.reload()">إعادة اللعب 🔄</button>
     </div>
 
     <script>
-        // ==============================================
-        // 1. المتغيرات والتهيئة
-        // ==============================================
-        let scene, camera, renderer;
-        let vehicle, boomGroup, spreaderMesh, cargoContainer;
-        let isAttached = false;
-        let isDelivered = false;
-        let isCabinCam = false;
-        
-        // حالة الحركة البسيطة
-        const input = { up: false, down: false, left: false, right: false };
-        let speed = 0;
-        let angle = 0;
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
 
-        // طاولات المشروبات (حاويات أفقية مصممة كبوفيه)
-        const STATIONS = [
-            { id: 1, name: "طاولة 1: ركن القهوة والإسبريسو", x: -24, z: 24, color: 0x1976d2 },
-            { id: 2, name: "طاولة 2: ركن العصائر الطازجة والموهيتو", x: 0, z: 32, color: 0x388e3c }, // الهدف
-            { id: 3, name: "طاولة 3: ركن المشروبات المثلجة", x: 24, z: 24, color: 0xf57c00 }
+        // حالة المعدة واللعبة
+        let truck = { x: 450, y: 480, angle: -Math.PI / 2, speed: 0, steer: 0 };
+        let cargo = { x: 450, y: 280, isAttached: false, isDelivered: false };
+        let keys = { up: false, down: false, left: false, right: false };
+
+        const TABLES = [
+            { id: 1, name: "قهوة ساخنة", color: "#1976d2", x: 180, y: 120, w: 140, h: 70 },
+            { id: 2, name: "عصائر وموهيتو (الهدف)", color: "#388e3c", x: 450, y: 120, w: 140, h: 70, target: true },
+            { id: 3, name: "مشروبات مثلجة", color: "#f57c00", x: 720, y: 120, w: 140, h: 70 }
         ];
-        const TARGET = STATIONS[1];
 
-        function init() {
-            const container = document.getElementById('canvas-container');
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xcddbe5);
-            scene.fog = new THREE.FogExp2(0xcddbe5, 0.015);
-
-            camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 16, -26);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            container.appendChild(renderer.domElement);
-
-            // إضاءة واقعية
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x445566, 0.7);
-            scene.add(hemiLight);
-
-            const sun = new THREE.DirectionalLight(0xffffff, 1.0);
-            sun.position.set(30, 60, -20);
-            sun.castShadow = true;
-            sun.shadow.mapSize.width = 1024;
-            sun.shadow.mapSize.height = 1024;
-            scene.add(sun);
-
-            // بناء العناصر
-            buildGround();
-            buildBuffetTables();
-            buildCargo();
-            buildKalmarModel();
-
-            // الاستماع للوحة المفاتيح
-            window.addEventListener('keydown', onKeyDown);
-            window.addEventListener('keyup', onKeyUp);
-            window.addEventListener('resize', onResize);
-
-            animate();
-        }
-
-        // ==============================================
-        // 2. بناء العالم والطاولات والمعدة
-        // ==============================================
-        function buildGround() {
-            const groundGeo = new THREE.PlaneGeometry(240, 240);
-            const groundMat = new THREE.MeshStandardMaterial({ color: 0x22272e, roughness: 0.8 });
-            const ground = new THREE.Mesh(groundGeo, groundMat);
-            ground.rotation.x = -Math.PI / 2;
-            ground.receiveShadow = true;
-            scene.add(ground);
-
-            const grid = new THREE.GridHelper(240, 48, 0xffd54f, 0x37474f);
-            grid.position.y = 0.02;
-            scene.add(grid);
-
-            // لافتة المعرض الرئيسية
-            createBanner("معرض ضيافة وزوار كالمر | KALMAR EXPERIENCE", 0, 10, -50);
-        }
-
-        function createBanner(text, x, y, z) {
-            const canvas = document.createElement('canvas');
-            canvas.width = 1024; canvas.height = 256;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = '#d31b23';
-            ctx.fillRect(0, 0, 1024, 256);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 44px Tahoma, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.fillText(text, 512, 145);
-
-            const tex = new THREE.CanvasTexture(canvas);
-            const banner = new THREE.Mesh(
-                new THREE.PlaneGeometry(36, 9),
-                new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
-            );
-            banner.position.set(x, y, z);
-            scene.add(banner);
-        }
-
-        function buildBuffetTables() {
-            STATIONS.forEach(st => {
-                const group = new THREE.Group();
-                group.position.set(st.x, 0, st.z);
-
-                // هيكل الطاولة كحاوية بوفيه
-                const tableMesh = new THREE.Mesh(
-                    new THREE.BoxGeometry(4.2, 1.8, 9.2),
-                    new THREE.MeshStandardMaterial({ color: st.color, roughness: 0.4 })
-                );
-                tableMesh.position.y = 0.9;
-                tableMesh.receiveShadow = true;
-                group.add(tableMesh);
-
-                // منصة الإنزال المضيئة
-                const pad = new THREE.Mesh(
-                    new THREE.PlaneGeometry(3.6, 8.4),
-                    new THREE.MeshBasicMaterial({ color: 0xffeb3b, wireframe: true })
-                );
-                pad.rotation.x = -Math.PI / 2;
-                pad.position.y = 1.82;
-                group.add(pad);
-
-                // لافتة اسم المشروب
-                const canvas = document.createElement('canvas');
-                canvas.width = 512; canvas.height = 128;
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = '#111722';
-                ctx.fillRect(0,0,512,128);
-                ctx.fillStyle = '#ffffff';
-                ctx.font = 'bold 24px Tahoma, sans-serif';
-                ctx.textAlign = 'center';
-                ctx.fillText(st.name, 256, 75);
-
-                const tex = new THREE.CanvasTexture(canvas);
-                const label = new THREE.Mesh(new THREE.PlaneGeometry(6.5, 1.6), new THREE.MeshBasicMaterial({ map: tex }));
-                label.position.set(0, 3.4, 0);
-                group.add(label);
-
-                scene.add(group);
-            });
-        }
-
-        function buildCargo() {
-            cargoContainer = new THREE.Group();
-            cargoContainer.position.set(0, 1.7, -10);
-
-            const body = new THREE.Mesh(
-                new THREE.BoxGeometry(3.4, 3.2, 8.2),
-                new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.4 })
-            );
-            body.castShadow = true;
-            body.receiveShadow = true;
-            cargoContainer.add(body);
-
-            scene.add(cargoContainer);
-        }
-
-        function buildKalmarModel() {
-            vehicle = new THREE.Group();
-
-            const redMat = new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.35 });
-            const darkMat = new THREE.MeshStandardMaterial({ color: 0x1f2327, roughness: 0.6 });
-            const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x182430, transparent: true, opacity: 0.7 });
-
-            // الشاسيه
-            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.8, 9.4), redMat);
-            chassis.position.y = 1.9;
-            chassis.castShadow = true;
-            vehicle.add(chassis);
-
-            // الثقل الخلفي المنحني
-            const cw = new THREE.Mesh(new THREE.BoxGeometry(4.4, 2.2, 2.2), redMat);
-            cw.position.set(0, 2.1, -4.4);
-            cw.castShadow = true;
-            vehicle.add(cw);
-
-            // كابينة السائق
-            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.0, 2.3), glassMat);
-            cabin.position.set(0, 3.6, -1.0);
-            vehicle.add(cabin);
-
-            // العجلات
-            const wheelGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.9, 18);
-            const wPos = [[-2.3, 1.2, 3.2], [2.3, 1.2, 3.2], [-2.3, 1.2, -3.2], [2.3, 1.2, -3.2]];
-            wPos.forEach(p => {
-                const w = new THREE.Mesh(wheelGeo, darkMat);
-                w.rotation.z = Math.PI / 2;
-                w.position.set(...p);
-                w.castShadow = true;
-                vehicle.add(w);
-            });
-
-            // الذراع الرئيسي المرفوع تلقائياً بارتفاع ممتاز
-            boomGroup = new THREE.Group();
-            boomGroup.position.set(0, 3.6, -2.8);
-
-            const boomArm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 12), darkMat);
-            boomArm.position.set(0, 0, 5.5);
-            boomArm.castShadow = true;
-            boomGroup.add(boomArm);
-
-            // الماسك (Spreader)
-            spreaderMesh = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.45, 8.4), darkMat);
-            spreaderMesh.position.set(0, -0.4, 11.2);
-            spreaderMesh.castShadow = true;
-            boomGroup.add(spreaderMesh);
-
-            // زعانف الإرشاد الصفراء
-            const flipperMat = new THREE.MeshStandardMaterial({ color: 0xffeb3b });
-            [[-1.85, -0.8, 7.2], [1.85, -0.8, 7.2], [-1.85, -0.8, 15.2], [1.85, -0.8, 15.2]].forEach(fp => {
-                const f = new THREE.Mesh(new THREE.BoxGeometry(0.15, 1.0, 0.3), flipperMat);
-                f.position.set(...fp);
-                boomGroup.add(f);
-            });
-
-            boomGroup.rotation.x = 0.22; // زاوية الرفع الأساسية
-            vehicle.add(boomGroup);
-
-            vehicle.position.set(0, 0, -24);
-            scene.add(vehicle);
-        }
-
-        // ==============================================
-        // 3. نظام الحركة الفوري والتحكم المبسط
-        // ==============================================
-        function press(dir) { input[dir] = true; }
-        function release(dir) { input[dir] = false; }
-
-        function onKeyDown(e) {
+        // الاستماع للوحة المفاتيح
+        window.addEventListener('keydown', e => {
             const k = e.key.toLowerCase();
-            if (k === 'w' || k === 'arrowup' || k === 'ص') input.up = true;
-            if (k === 's' || k === 'arrowdown' || k === 'س') input.down = true;
-            if (k === 'a' || k === 'arrowleft' || k === 'ش') input.left = true;
-            if (k === 'd' || k === 'arrowright' || k === 'ي') input.right = true;
-            if (e.code === 'Space' || k === 'e' || k === 'ث') handleActionButton();
-        }
+            if (k === 'w' || k === 'arrowup' || k === 'ص') keys.up = true;
+            if (k === 's' || k === 'arrowdown' || k === 'س') keys.down = true;
+            if (k === 'a' || k === 'arrowleft' || k === 'ش') keys.left = true;
+            if (k === 'd' || k === 'arrowright' || k === 'ي') keys.right = true;
+            if (e.code === 'Space' || k === 'e' || k === 'ث') triggerAction();
+        });
 
-        function onKeyUp(e) {
+        window.addEventListener('keyup', e => {
             const k = e.key.toLowerCase();
-            if (k === 'w' || k === 'arrowup' || k === 'ص') input.up = false;
-            if (k === 's' || k === 'arrowdown' || k === 'س') input.down = false;
-            if (k === 'a' || k === 'arrowleft' || k === 'ش') input.left = false;
-            if (k === 'd' || k === 'arrowright' || k === 'ي') input.right = false;
-        }
+            if (k === 'w' || k === 'arrowup' || k === 'ص') keys.up = false;
+            if (k === 's' || k === 'arrowdown' || k === 'س') keys.down = false;
+            if (k === 'a' || k === 'arrowleft' || k === 'ش') keys.left = false;
+            if (k === 'd' || k === 'arrowright' || k === 'ي') keys.right = false;
+        });
 
-        function updateVehicle() {
-            // سرعة وسلاسة الحركة
-            if (input.up) speed = Math.min(speed + 0.02, 0.28);
-            else if (input.down) speed = Math.max(speed - 0.02, -0.20);
-            else speed *= 0.88;
+        // ربط أزرار اللمس
+        const bindTouch = (id, key) => {
+            const el = document.getElementById(id);
+            const start = () => { keys[key] = true; el.classList.add('active'); };
+            const end = () => { keys[key] = false; el.classList.remove('active'); };
+            el.addEventListener('mousedown', start);
+            el.addEventListener('mouseup', end);
+            el.addEventListener('touchstart', (e) => { e.preventDefault(); start(); });
+            el.addEventListener('touchend', (e) => { e.preventDefault(); end(); });
+        };
+        bindTouch('b-up', 'up');
+        bindTouch('b-down', 'down');
+        bindTouch('b-left', 'left');
+        bindTouch('b-right', 'right');
 
-            // الانعطاف
-            if (input.left) angle += 0.032;
-            if (input.right) angle -= 0.032;
+        function triggerAction() {
+            if (cargo.isDelivered) return;
 
-            vehicle.rotation.y = angle;
-            vehicle.translateZ(speed);
+            // حساب المسافة بين مقدمة ونش كالمر والحاوية
+            const spreaderX = truck.x + Math.cos(truck.angle) * 75;
+            const spreaderY = truck.y + Math.sin(truck.angle) * 75;
+            const distToCargo = Math.hypot(spreaderX - cargo.x, spreaderY - cargo.y);
 
-            // تحديث حالة القرب لتسهيل الالتقاط والإنزال على اللاعب
-            checkProximity();
-        }
-
-        function checkProximity() {
-            if (isDelivered) return;
-
-            const spreaderWorld = new THREE.Vector3();
-            spreaderMesh.getWorldPosition(spreaderWorld);
-
-            const cargoWorld = new THREE.Vector3();
-            cargoContainer.getWorldPosition(cargoWorld);
-
-            const badge = document.getElementById('status-badge');
-            const btnText = document.getElementById('action-btn-text');
-
-            if (!isAttached) {
-                const dist = spreaderWorld.distanceTo(new THREE.Vector3(cargoWorld.x, cargoWorld.y + 1.8, cargoWorld.z));
-                if (dist < 5.5) {
-                    badge.className = "badge badge-ready";
-                    badge.innerText = "جاهز للالتقاط! اضغط الزر الأحمر 👇";
-                } else {
-                    badge.className = "badge badge-wait";
-                    badge.innerText = "اقترب من الحاوية الحمراء لالتقاطها";
-                }
-                btnText.innerText = "التقاط الحاوية 📦";
-            } else {
-                const targetPos = new THREE.Vector3(TARGET.x, 1.8, TARGET.z);
-                const distToBuffet = cargoWorld.distanceTo(targetPos);
-                if (distToBuffet < 6.5) {
-                    badge.className = "badge badge-ready";
-                    badge.innerText = "فوق طاولة المشروب الصحيحة! اضغط إنزال 👇";
-                } else {
-                    badge.className = "badge badge-wait";
-                    badge.innerText = "توجّه إلى طاولة رقم 2 (العصائر)";
-                }
-                btnText.innerText = "إنزال الحاوية ⬇️";
-            }
-        }
-
-        function handleActionButton() {
-            if (isDelivered) return;
-
-            const spreaderWorld = new THREE.Vector3();
-            spreaderMesh.getWorldPosition(spreaderWorld);
-
-            const cargoWorld = new THREE.Vector3();
-            cargoContainer.getWorldPosition(cargoWorld);
-
-            if (!isAttached) {
-                // التقاط فوري
-                const dist = spreaderWorld.distanceTo(new THREE.Vector3(cargoWorld.x, cargoWorld.y + 1.8, cargoWorld.z));
-                if (dist < 7.0) { // مسافة متسامحة جداً لتوفير تحكم سهل
-                    boomGroup.attach(cargoContainer);
-                    cargoContainer.position.set(0, -2.0, 11.2);
-                    cargoContainer.rotation.set(0, 0, 0);
-
-                    isAttached = true;
-                    document.getElementById('status-badge').className = "badge badge-wait";
-                    document.getElementById('status-badge').innerText = "محمولة بنجاح! توجّه لطاولة العصائر";
+            if (!cargo.isAttached) {
+                if (distToCargo < 70) {
+                    cargo.isAttached = true;
+                    document.getElementById('status-text').innerText = "محمولة بنجاح! توجّه للطاولة الخضراء";
+                    document.getElementById('status-text').style.color = "#00e676";
+                    document.getElementById('action-btn').innerText = "⬇️ إنزال الحاوية";
                 }
             } else {
-                // إنزال فوري
-                const targetPos = new THREE.Vector3(TARGET.x, 1.8, TARGET.z);
-                const distToBuffet = cargoWorld.distanceTo(targetPos);
+                // فحص الوصول لطاولة العصائر رقم 2
+                const targetTable = TABLES[1];
+                const distToTable = Math.hypot(cargo.x - targetTable.x, cargo.y - targetTable.y);
 
-                if (distToBuffet < 7.5) {
-                    // تسليم ناجح
-                    scene.attach(cargoContainer);
-                    cargoContainer.position.set(TARGET.x, 3.4, TARGET.z);
-                    cargoContainer.rotation.set(0, 0, 0);
-
-                    isAttached = false;
-                    isDelivered = true;
-                    document.getElementById('status-badge').className = "badge badge-ready";
-                    document.getElementById('status-badge').innerText = "✅ تم تسليم الطلب بنجاح!";
+                if (distToTable < 80) {
+                    cargo.isAttached = false;
+                    cargo.isDelivered = true;
+                    cargo.x = targetTable.x;
+                    cargo.y = targetTable.y;
+                    document.getElementById('status-text').innerText = "✅ تم تسليم الطلب بنجاح!";
                     document.getElementById('win-modal').style.display = 'block';
                 } else {
-                    // إنزال عادي
-                    scene.attach(cargoContainer);
-                    cargoContainer.position.y = 1.7;
-                    isAttached = false;
+                    cargo.isAttached = false;
+                    document.getElementById('status-text').innerText = "تم الإنزال! اقترب واضغط لالتقاطها";
+                    document.getElementById('status-text').style.color = "#ff9800";
+                    document.getElementById('action-btn').innerText = "📦 التقاط الحاوية";
                 }
             }
         }
 
-        function toggleCamera() {
-            isCabinCam = !isCabinCam;
-        }
+        function update() {
+            // معالجة الحركة
+            if (keys.up) truck.speed = Math.min(truck.speed + 0.3, 3.8);
+            else if (keys.down) truck.speed = Math.max(truck.speed - 0.3, -2.5);
+            else truck.speed *= 0.88;
 
-        function updateCamera() {
-            if (!isCabinCam) {
-                const offset = new THREE.Vector3(0, 14, -24);
-                offset.applyMatrix4(vehicle.matrixWorld);
-                camera.position.lerp(offset, 0.1);
-                camera.lookAt(vehicle.position.x, vehicle.position.y + 2.5, vehicle.position.z);
-            } else {
-                const cabinPos = new THREE.Vector3(0, 3.9, -0.8);
-                cabinPos.applyMatrix4(vehicle.matrixWorld);
-                camera.position.copy(cabinPos);
+            if (keys.left) truck.angle -= 0.045;
+            if (keys.right) truck.angle += 0.045;
 
-                const lookTarget = new THREE.Vector3(0, 3.6, 14);
-                lookTarget.applyMatrix4(vehicle.matrixWorld);
-                camera.lookAt(lookTarget);
+            truck.x += Math.cos(truck.angle) * truck.speed;
+            truck.y += Math.sin(truck.angle) * truck.speed;
+
+            // حدود الشاشة
+            truck.x = Math.max(40, Math.min(canvas.width - 40, truck.x));
+            truck.y = Math.max(40, Math.min(canvas.height - 40, truck.y));
+
+            // تحديث موقع الحاوية المحمولة
+            if (cargo.isAttached) {
+                cargo.x = truck.x + Math.cos(truck.angle) * 75;
+                cargo.y = truck.y + Math.sin(truck.angle) * 75;
             }
         }
 
-        function onResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. رسم خطوط الساحة الأرضية
+            ctx.strokeStyle = '#374151';
+            ctx.lineWidth = 1;
+            for (let i = 0; i < canvas.width; i += 50) {
+                ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height); ctx.stroke();
+            }
+            for (let i = 0; i < canvas.height; i += 50) {
+                ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(canvas.width, i); ctx.stroke();
+            }
+
+            // 2. رسم طاولات البوفيه (الحاويات الأفقية)
+            TABLES.forEach(t => {
+                ctx.save();
+                ctx.translate(t.x, t.y);
+
+                // ظل الطاولة
+                ctx.fillStyle = 'rgba(0,0,0,0.4)';
+                ctx.fillRect(-t.w / 2 + 5, -t.h / 2 + 5, t.w, t.h);
+
+                // جسم طاولة البوفيه
+                ctx.fillStyle = t.color;
+                ctx.fillRect(-t.w / 2, -t.h / 2, t.w, t.h);
+
+                // إطار مضيء للهدف
+                if (t.target) {
+                    ctx.strokeStyle = '#ffeb3b';
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(-t.w / 2 - 2, -t.h / 2 - 2, t.w + 4, t.h + 4);
+                }
+
+                // اسم الطاولة
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 13px Tahoma';
+                ctx.textAlign = 'center';
+                ctx.fillText(t.name, 0, 5);
+
+                ctx.restore();
+            });
+
+            // 3. رسم حاوية الطلب
+            ctx.save();
+            ctx.translate(cargo.x, cargo.y);
+            if (cargo.isAttached) ctx.rotate(truck.angle);
+
+            // ظل الحاوية
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(-22, -45, 44, 90);
+
+            // جسم الحاوية الحمراء
+            ctx.fillStyle = '#d31b23';
+            ctx.fillRect(-20, -48, 40, 96);
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(-20, -48, 40, 96);
+
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 10px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('KALMAR', 0, 4);
+
+            ctx.restore();
+
+            // 4. رسم ونش Kalmar Reachstacker
+            ctx.save();
+            ctx.translate(truck.x, truck.y);
+            ctx.rotate(truck.angle);
+
+            // ظل الشاحنة
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillRect(-45, -28, 90, 56);
+
+            // العجلات الأربع
+            ctx.fillStyle = '#111';
+            ctx.fillRect(-38, -32, 22, 9);
+            ctx.fillRect(20, -32, 22, 9);
+            ctx.fillRect(-38, 23, 22, 9);
+            ctx.fillRect(20, 23, 22, 9);
+
+            // الشاسيه الأحمر لكالمر
+            ctx.fillStyle = '#d31b23';
+            ctx.fillRect(-40, -25, 80, 50);
+
+            // الثقل الخلفي مع خطوط الأمان
+            ctx.fillStyle = '#99141a';
+            ctx.fillRect(-40, -25, 18, 50);
+
+            // كابينة السائق الزجاجية
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(-10, -18, 26, 36);
+
+            // الذراع الهيدروليكي (Boom) ممتد للأمام
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(5, -7, 68, 14);
+
+            // الماسكة (Spreader)
+            ctx.fillStyle = '#374151';
+            ctx.fillRect(70, -28, 10, 56);
+
+            // أذرع الإرشاد الصفراء على أطراف الماسك
+            ctx.fillStyle = '#ffeb3b';
+            ctx.fillRect(68, -30, 14, 5);
+            ctx.fillRect(68, 25, 14, 5);
+
+            ctx.restore();
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            updateVehicle();
-            updateCamera();
-            renderer.render(scene, camera);
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
         }
 
-        window.onload = init;
+        gameLoop();
     </script>
 </body>
 </html>
