@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Kalmar Reachstacker 3D Real Simulator</title>
+    <title>Kalmar Reachstacker 3D Real Mechanism</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
         body { overflow: hidden; background: #080a0f; color: #fff; }
         #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; cursor: grab; }
         #canvas-container:active { cursor: grabbing; }
 
-        /* شاشة البداية */
         #menu-modal {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(8, 12, 18, 0.96); display: flex; flex-direction: column;
@@ -29,7 +28,6 @@
         .drink-name { font-size: 17px; font-weight: bold; color: #fff; margin-bottom: 4px; }
         .drink-table { font-size: 13px; color: #ffd54f; font-weight: bold; }
 
-        /* شاشات الـ HUD */
         #hud {
             position: absolute; top: 12px; left: 16px; right: 16px;
             display: flex; justify-content: space-between; pointer-events: none; z-index: 10;
@@ -46,7 +44,6 @@
         .hud-title { font-size: 11px; color: #8fa0b5; font-weight: bold; text-transform: uppercase; }
         .hud-val { font-size: 16px; font-weight: bold; color: #ffca28; margin-top: 3px; }
 
-        /* إرشاد الماوس */
         #cam-hint {
             position: absolute; top: 80px; right: 20px;
             background: rgba(0,0,0,0.75); border: 1px solid #475569;
@@ -54,7 +51,6 @@
             pointer-events: none; z-index: 10;
         }
 
-        /* شريط التنبيهات */
         #alert-box {
             position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
             background: rgba(0, 0, 0, 0.92); border: 2px solid #ff9800; border-radius: 20px;
@@ -63,7 +59,6 @@
             text-align: center; max-width: 90vw;
         }
 
-        /* أزرار التحكم السفلية */
         #controls-wrapper {
             position: absolute; bottom: 14px; left: 0; right: 0;
             display: flex; justify-content: space-between; align-items: flex-end;
@@ -83,7 +78,7 @@
 
         .action-panel { display: flex; gap: 8px; align-items: center; pointer-events: auto; }
         .hyd-btn {
-            width: 74px; height: 56px; background: #263238; border: 2px solid #546e7a;
+            width: 80px; height: 56px; background: #263238; border: 2px solid #546e7a;
             color: #ffeb3b; font-size: 12px; font-weight: bold; border-radius: 10px;
             display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
         }
@@ -97,7 +92,6 @@
         }
         #main-action-btn:active { transform: scale(0.92); }
 
-        /* نافذة الفوز */
         #win-modal {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: rgba(12, 18, 28, 0.98); border: 3px solid #00e676; border-radius: 16px;
@@ -110,7 +104,7 @@
 <body>
 
     <div id="menu-modal">
-        <div class="menu-title">🥤 مرحباً بك في بوفيه ضيافة كالمر</div>
+        <div class="menu-title">🥤 مرحباً بك في ضيافة شركة كالمر</div>
         <div class="menu-sub">اختر طلبك للبدء في نقله وتوصيله بواسطة رافعة الحاويات <b>Kalmar Reachstacker</b>:</div>
         <div class="drink-options">
             <div class="drink-card" onclick="selectDrink(1)">
@@ -158,21 +152,21 @@
         </div>
 
         <div class="action-panel">
-            <button class="hyd-btn" id="b-lift-up"><span>▲ رفع [R]</span><span style="font-size:10px; color:#aaa;">(بستم لأعلى)</span></button>
-            <button class="hyd-btn" id="b-lift-down"><span>▼ خفض [F]</span><span style="font-size:10px; color:#aaa;">(بستم لأسفل)</span></button>
+            <button class="hyd-btn" id="b-lift-up"><span>▲ رفع [R]</span><span style="font-size:10px; color:#00e676;">(دفع البستم لأعلى)</span></button>
+            <button class="hyd-btn" id="b-lift-down"><span>▼ خفض [F]</span><span style="font-size:10px; color:#ff9800;">(انكماش البستم)</span></button>
             <button id="main-action-btn" onclick="toggleTwistlocks()">🔒 قفل / فتح [E]</button>
         </div>
     </div>
 
     <div id="win-modal">
         <h2 style="color: #00e676; margin-bottom: 8px;">🎉 إتقان تام وهبوط سلس!</h2>
-        <p style="color: #cfd8dc; margin-bottom: 18px;">تم إنزال الحاوية وتثبيتها بدقة تامة فوق سطح الطاولة الصحيحة دون أي تصادم.<br>استمتع بمشروبك في ضيافة شركة كالمر!</p>
+        <p style="color: #cfd8dc; margin-bottom: 18px;">تم إنزال الحاوية وتثبيتها بدقة تامة فوق سطح الطاولة الصحيحة.<br>استمتع بمشروبك في ضيافة شركة كالمر!</p>
         <button class="ctrl-btn" style="padding: 10px 25px; margin: 0 auto; font-size: 15px; background: #00e676; color: #000; border: none;" onclick="location.reload()">طلب مشروب آخر 🔄</button>
     </div>
 
     <script>
         // ==============================================
-        // 1. نظام الصوت الصناعي للمعدات الثقيلة
+        // 1. نظام الصوت الصناعي
         // ==============================================
         class KalmarHeavyAudio {
             constructor() {
@@ -281,16 +275,18 @@
         const audio = new KalmarHeavyAudio();
 
         // ==============================================
-        // 2. المشهد والمقاييس الهندسية
+        // 2. إعداد المشهد والمقاييس
         // ==============================================
         let scene, camera, renderer;
         let vehicle, boomPivot, boomOuter, spreaderGroup, cargoBox;
         let leftCylGroup, rightCylGroup, leftPistonRod, rightPistonRod;
-        let boomCylinderMountPoint; // النقطة التي يتصل بها البستم أسفل الذراع
+        let leftBoomAttach, rightBoomAttach;
         let twistlockPins = [];
         let targetStation = null;
         let isCargoLocked = false;
-        let boomAngle = 0.0; // 0.0 (أسفل) إلى 0.52 راديان (أعلى)
+        
+        // زاوية الذراع: 0.05 (منخفضة/وضع التقاط الحاوية من الأرض) إلى 0.55 (مرتفعة لأعلى)
+        let boomAngle = 0.05;
 
         const CONTAINER_DIMS = { width: 6.1, height: 2.6, depth: 2.4 };
         const TABLE_DIMS = { width: 7.2, height: 1.8, depth: 3.4 };
@@ -313,7 +309,7 @@
             targetStation = STATIONS.find(s => s.id === id);
             document.getElementById('selected-drink-txt').innerText = targetStation.name;
             document.getElementById('menu-modal').style.display = 'none';
-            showAlert(`اسحب بالماوس لتدوير الكاميرا، اضغط [R] لرفع البستم و[F] للخفض، ثم توجه إلى: ${targetStation.name}`, "#ffca28");
+            showAlert(`اسحب بالماوس لتدوير الكاميرا، اضغط [R] لرفع الذراع و[F] للخفض، ثم توجه إلى: ${targetStation.name}`, "#ffca28");
         }
 
         function showAlert(msg, color = "#ff9800") {
@@ -355,7 +351,6 @@
             buildCargoContainer();
             buildRealisticKalmarReachstacker();
 
-            // الاستماع للماوس لتدوير الكاميرا
             window.addEventListener('mousedown', e => {
                 isDragging = true;
                 prevMousePos = { x: e.clientX, y: e.clientY };
@@ -386,7 +381,7 @@
             });
             window.addEventListener('touchend', () => isDragging = false);
 
-            // أزرار الكيبورد
+            // أزرار الكيبورد: R = رفع لأعلى / F = خفض لأسفل
             window.addEventListener('keydown', e => {
                 audio.init();
                 const k = e.key.toLowerCase();
@@ -394,8 +389,8 @@
                 if (k === 's' || k === 'arrowdown' || k === 'س') keys.down = true;
                 if (k === 'a' || k === 'arrowleft' || k === 'ش') keys.left = true;
                 if (k === 'd' || k === 'arrowright' || k === 'ي') keys.right = true;
-                if (k === 'r' || k === 'ق') keys.liftUp = true;   // رفع -> بستم لأعلى
-                if (k === 'f' || k === 'ب') keys.liftDown = true; // خفض -> بستم لأسفل
+                if (k === 'r' || k === 'ق') keys.liftUp = true;   // رفع لأعلى
+                if (k === 'f' || k === 'ب') keys.liftDown = true; // خفض لأسفل
                 if (e.code === 'Space' || k === 'e' || k === 'ث') toggleTwistlocks();
             });
 
@@ -409,7 +404,6 @@
                 if (k === 'f' || k === 'ب') keys.liftDown = false;
             });
 
-            // أزرار اللمس
             const setupTouch = (id, keyName) => {
                 const el = document.getElementById(id);
                 const start = () => { audio.init(); keys[keyName] = true; el.classList.add('active'); };
@@ -490,7 +484,7 @@
 
         function buildCargoContainer() {
             cargoBox = new THREE.Group();
-            cargoBox.position.set(0, CONTAINER_DIMS.height / 2, -6);
+            cargoBox.position.set(0, CONTAINER_DIMS.height / 2, -5.5);
 
             const body = new THREE.Mesh(
                 new THREE.BoxGeometry(CONTAINER_DIMS.width, CONTAINER_DIMS.height, CONTAINER_DIMS.depth),
@@ -521,7 +515,7 @@
         }
 
         // ==============================================
-        // 4. بناء ونش Kalmar Reachstacker بالميكانيزم الحقيقي
+        // 4. بناء الونش والميكانيزم المتوازي الحقيقي (مطابق للصور 1 و 2 و 3)
         // ==============================================
         function buildRealisticKalmarReachstacker() {
             vehicle = new THREE.Group();
@@ -531,32 +525,34 @@
             const chromeMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.95, roughness: 0.1 });
             const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x182430, transparent: true, opacity: 0.7 });
 
-            // الشاسيه الرئيسي
+            // 1. الشاسيه الرئيسي
             const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.8, 10.5), redMat);
             chassis.position.y = 2.0;
             chassis.castShadow = true;
             vehicle.add(chassis);
 
-            // الثقل الخلفي المنحني
+            // 2. الثقل الخلفي المنحني
             const cw = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.4, 2.5), redMat);
             cw.position.set(0, 2.3, -4.8);
             cw.castShadow = true;
             vehicle.add(cw);
 
-            // برج الارتكاز الخلفي العالي الحامل للذراع الرئيسي
+            // 3. الأبراج الخلفية الحمراء الحاملة للمفصل الرئيسي
             const rearTower = new THREE.Mesh(new THREE.BoxGeometry(3.6, 2.6, 1.8), redMat);
             rearTower.position.set(0, 3.8, -3.8);
             rearTower.castShadow = true;
             vehicle.add(rearTower);
 
-            // الكابينة
+            // 4. الكابينة (في الوسط أسفل الذراع)
             const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.1, 2.4), glassMat);
             cabin.position.set(0, 3.8, -1.0);
             vehicle.add(cabin);
 
-            // العجلات
+            // 5. العجلات (أمامية مزدوجة وخلفية توجيه كالصورة 3)
             const wheelGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.9, 20);
-            [[-2.2, 1.2, 3.5], [2.2, 1.2, 3.5], [-2.2, 1.2, -3.5], [2.2, 1.2, -3.5]].forEach(p => {
+            // العجلات الأمامية المزدوجة
+            [[-2.2, 1.2, 3.5], [-3.1, 1.2, 3.5], [2.2, 1.2, 3.5], [3.1, 1.2, 3.5],
+             [-2.2, 1.2, -3.5], [2.2, 1.2, -3.5]].forEach(p => {
                 const w = new THREE.Mesh(wheelGeo, darkMat);
                 w.rotation.z = Math.PI / 2;
                 w.position.set(...p);
@@ -564,22 +560,26 @@
                 vehicle.add(w);
             });
 
-            // مفصل الذراع الخلفي في أعلى البرج
+            // 6. مفصل الذراع الخلفي في أعلى البرج
             boomPivot = new THREE.Group();
             boomPivot.position.set(0, 4.8, -4.0);
 
-            // الذراع الرئيسي الممتد للأمام
+            // الذراع الرئيسي المائل الممتد للأمام فوق الكابينة
             boomOuter = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 15.5), darkMat);
             boomOuter.position.set(0, 0, 7.5);
             boomOuter.castShadow = true;
             boomPivot.add(boomOuter);
 
-            // نقطة ارتكاز البستم أسفل الذراع (على بعد 5.5 متر من المفصل الخلفي)
-            boomCylinderMountPoint = new THREE.Group();
-            boomCylinderMountPoint.position.set(0, -0.7, 5.5);
-            boomPivot.add(boomCylinderMountPoint);
+            // نقاط اتصال البساتم على جانبي الذراع (موازية لجوانب الشاسيه)
+            leftBoomAttach = new THREE.Group();
+            leftBoomAttach.position.set(-1.4, -0.6, 6.0); // على الجانب الأيسر للذراع
+            boomPivot.add(leftBoomAttach);
 
-            // الماسك (Spreader) المعلق في مقدمة الذراع
+            rightBoomAttach = new THREE.Group();
+            rightBoomAttach.position.set(1.4, -0.6, 6.0); // على الجانب الأيمن للذراع
+            boomPivot.add(rightBoomAttach);
+
+            // 7. الماسك (Top-Lift Spreader) المعلق في مقدمة الذراع
             spreaderGroup = new THREE.Group();
             spreaderGroup.position.set(0, -0.6, 15.0);
 
@@ -625,29 +625,29 @@
             vehicle.add(boomPivot);
 
             // ==============================================
-            // ميكانيزم أسطوانات وبساتم الرفع الحقيقية (Real Dual Lift Cylinders)
+            // 8. أسطوانات وبساتم الرفع الموازية للشاسيه (Parallel Side Cylinders)
             // ==============================================
-            // الأسطوانات مثبتة في مقدمة الشاسيه وتشير لأعلى وللخلف نحو الذراع
+            // الأسطوانة اليسرى: ترتكز في مقدمة الشاسيه الأيسر
             leftCylGroup = new THREE.Group();
-            leftCylGroup.position.set(-1.6, 2.6, 2.0); // ارتكاز البستم في مقدمة الشاسيه
-            const leftBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.5, 16), darkMat);
-            leftBarrel.position.y = 2.25; // للأعلى في محور المجموعة
-            leftBarrel.rotation.x = 0;
+            leftCylGroup.position.set(-1.4, 2.5, 2.2); // مرتكزة على الشاسيه يسار الكابينة
+            const leftBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 4.2, 16), darkMat);
+            leftBarrel.position.y = 2.1;
             leftCylGroup.add(leftBarrel);
 
-            leftPistonRod = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 5.0, 16), chromeMat);
-            leftPistonRod.position.y = 4.5;
+            leftPistonRod = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 5.0, 16), chromeMat);
+            leftPistonRod.position.y = 4.2;
             leftCylGroup.add(leftPistonRod);
             vehicle.add(leftCylGroup);
 
+            // الأسطوانة اليمنى: ترتكز في مقدمة الشاسيه الأيمن
             rightCylGroup = new THREE.Group();
-            rightCylGroup.position.set(1.6, 2.6, 2.0);
-            const rightBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.5, 16), darkMat);
-            rightBarrel.position.y = 2.25;
+            rightCylGroup.position.set(1.4, 2.5, 2.2); // مرتكزة على الشاسيه يمين الكابينة
+            const rightBarrel = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.26, 4.2, 16), darkMat);
+            rightBarrel.position.y = 2.1;
             rightCylGroup.add(rightBarrel);
 
-            rightPistonRod = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 5.0, 16), chromeMat);
-            rightPistonRod.position.y = 4.5;
+            rightPistonRod = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 5.0, 16), chromeMat);
+            rightPistonRod.position.y = 4.2;
             rightCylGroup.add(rightPistonRod);
             vehicle.add(rightCylGroup);
 
@@ -656,33 +656,36 @@
         }
 
         // ==============================================
-        // 5. تحديث حركة الونش والبساتم الهيدروليكية (Inverse Kinematics)
+        // 5. تحديث حركة البساتم الهيدروليكية (True 3D Cylinder Tracking)
         // ==============================================
         function updateHydraulicPistons() {
-            // حساب موقع نقطة تثبيت البستم أسفل الذراع
-            const mountWorldPos = new THREE.Vector3();
-            boomCylinderMountPoint.getWorldPosition(mountWorldPos);
+            // تتبع الأسطوانة اليسرى
+            const leftAttachWorld = new THREE.Vector3();
+            leftBoomAttach.getWorldPosition(leftAttachWorld);
 
-            // تحديث توجيه وتمدد أسطوانة الرفع اليسرى
-            const leftBaseWorldPos = new THREE.Vector3();
-            leftCylGroup.getWorldPosition(leftBaseWorldPos);
-            const distLeft = leftBaseWorldPos.distanceTo(mountWorldPos);
+            const leftBaseWorld = new THREE.Vector3();
+            leftCylGroup.getWorldPosition(leftBaseWorld);
+            const distLeft = leftBaseWorld.distanceTo(leftAttachWorld);
 
-            // توجيه الأسطوانة مباشرة نحو نقطة الارتكاز على الذراع
-            leftCylGroup.lookAt(mountWorldPos);
-            leftCylGroup.rotateX(Math.PI / 2); // محاذاة محور الأسطوانة الرأسي مع اتجاه النظر
+            // توجيه الأسطوانة نحو نقطة الاتصال على الذراع
+            leftCylGroup.lookAt(leftAttachWorld);
+            leftCylGroup.rotateX(Math.PI / 2); // محاذاة محور الأسطوانة
 
-            // دفع البستم الكرومي للخارج طردياً مع المسافة (رفع = دفع لأعلى)
-            leftPistonRod.position.y = distLeft - 1.5;
+            // تمديد المكبس الكرومي للأعلى مع زيادة المسافة
+            leftPistonRod.position.y = distLeft - 1.2;
 
-            // تحديث توجيه وتمدد أسطوانة الرفع اليمنى
-            const rightBaseWorldPos = new THREE.Vector3();
-            rightCylGroup.getWorldPosition(rightBaseWorldPos);
-            const distRight = rightBaseWorldPos.distanceTo(mountWorldPos);
+            // تتبع الأسطوانة اليمنى
+            const rightAttachWorld = new THREE.Vector3();
+            rightBoomAttach.getWorldPosition(rightAttachWorld);
 
-            rightCylGroup.lookAt(mountWorldPos);
+            const rightBaseWorld = new THREE.Vector3();
+            rightCylGroup.getWorldPosition(rightBaseWorld);
+            const distRight = rightBaseWorld.distanceTo(rightAttachWorld);
+
+            rightCylGroup.lookAt(rightAttachWorld);
             rightCylGroup.rotateX(Math.PI / 2);
-            rightPistonRod.position.y = distRight - 1.5;
+
+            rightPistonRod.position.y = distRight - 1.2;
         }
 
         function checkCollisions(nextTruckX, nextTruckZ) {
@@ -755,33 +758,34 @@
             }
 
             // ==============================================
-            // تصحيح اتجاه الرفع والخفض:
-            // [R] أو [▲ رفع] = زيادة زاوية الذراع (رفع) -> البستم يمتد ويدفع لأعلى
-            // [F] أو [▼ خفض] = تقليل زاوية الذراع (خفض) -> البستم ينكمش لأسفل
+            // التحكم المباشر والدقيق في الرفع والخفض:
+            // [R] أو [▲ رفع]: يزيد زاوية الذراع لأعلى (0.05 -> 0.55) -> يدفع البستم لأعلى
+            // [F] أو [▼ خفض]: يقلل زاوية الذراع لأسفل (0.55 -> 0.05) -> ينكمش البستم لأسفل
             // ==============================================
             let isHyd = false;
-            if (keys.liftUp && boomAngle < 0.52) {
+            if (keys.liftUp && boomAngle < 0.55) {
                 boomAngle += 0.005; // رفع لأعلى
                 isHyd = true;
             }
-            if (keys.liftDown && boomAngle > 0.0) {
+            if (keys.liftDown && boomAngle > 0.05) {
                 boomAngle -= 0.005; // خفض لأسفل
                 isHyd = true;
             }
             if (isHyd) audio.playHydraulic();
 
-            // تطبيق دوران الذراع واستواء الماسك
+            // تطبيق زاوية الرفع على الذراع
             boomPivot.rotation.x = boomAngle;
+            // استواء الماسك الأفقي دائماً موازياً للأرض
             spreaderGroup.rotation.x = -boomAngle;
 
-            // تحديث حركة البساتم الهيدروليكية لتتبع حركة الذراع بدقة
+            // تحديث حركة البساتم المتوازية مع الذراع
             updateHydraulicPistons();
 
             audio.setEngineSpeed(speed / 0.26);
 
             const spreaderWorld = new THREE.Vector3();
             spreaderGroup.getWorldPosition(spreaderWorld);
-            const currentElev = Math.max(0, spreaderWorld.y - 2.8);
+            const currentElev = Math.max(0, spreaderWorld.y - 3.2);
 
             document.getElementById('telemetry').innerText = 
                 `الارتفاع: ${currentElev.toFixed(1)}m | ${isCargoLocked ? "🔒 مقفول (Locked)" : "🔓 مفتوح"}`;
@@ -907,4 +911,4 @@
         window.onload = init;
     </script>
 </body>
-</html>
+</html
