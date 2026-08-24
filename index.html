@@ -69,6 +69,7 @@
         }
         #message-box button:hover { background: #b8141b; transform: scale(1.05); }
 
+        /* كاميرا توضيحية */
         #cam-indicator {
             position: absolute; top: 20px; right: 20px;
             background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px;
@@ -118,6 +119,7 @@
     </div>
 
     <script>
+        // --- متغيرات المشهد والمعدة ---
         let scene, camera, renderer, vehicle, boom, spreader, containerBox;
         let keys = {};
         let isDriverView = false;
@@ -125,7 +127,7 @@
 
         const STATIONS = [
             { id: 1, name: "طاولة 1: ركن المشروبات والقهوة", x: -30, z: 25, color: 0x2196f3 },
-            { id: 2, name: "طاولة 2: بوفيه المشويات الساخنة", x: 0, z: 35, color: 0x00e676 },
+            { id: 2, name: "طاولة 2: بوفيه المشويات الساخنة", x: 0, z: 35, color: 0x00e676 }, // المحطة الهدف
             { id: 3, name: "طاولة 3: ركن الحلويات والفاكهة", x: 30, z: 25, color: 0xff9800 }
         ];
         const TARGET_STATION = STATIONS[1];
@@ -156,10 +158,12 @@
             dirLight.shadow.mapSize.height = 2048;
             scene.add(dirLight);
 
+            // بناء البيئة والمعدة والطاولات
             createEnvironment();
             createBuffetStations();
             buildReachStacker();
 
+            // الاستماع للوحة المفاتيح
             window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
             window.addEventListener('keyup', (e) => {
                 keys[e.key.toLowerCase()] = false;
@@ -171,6 +175,7 @@
             animate();
         }
 
+        // بناء أرضية المعرض واللافتات
         function createEnvironment() {
             const groundGeo = new THREE.PlaneGeometry(250, 250);
             const groundMat = new THREE.MeshStandardMaterial({ color: 0x2d3138, roughness: 0.85 });
@@ -183,6 +188,7 @@
             grid.position.y = 0.02;
             scene.add(grid);
 
+            // بنرات المعرض الكبرى
             createBanner("معرض ضيافة وزوار كالمر | Kalmar Exhibition", 0, 12, -60, 0xd31b23);
         }
 
@@ -206,11 +212,13 @@
             scene.add(banner);
         }
 
+        // بناء طاولات البوفيه
         function createBuffetStations() {
             STATIONS.forEach(station => {
                 const group = new THREE.Group();
                 group.position.set(station.x, 0, station.z);
 
+                // منصة الطاولة
                 const table = new THREE.Mesh(
                     new THREE.BoxGeometry(10, 1.8, 5.5),
                     new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.5 })
@@ -219,6 +227,7 @@
                 table.receiveShadow = true;
                 group.add(table);
 
+                // منطقة الإنزال المحددة
                 const pad = new THREE.Mesh(
                     new THREE.PlaneGeometry(8.5, 4.2),
                     new THREE.MeshBasicMaterial({ color: station.color })
@@ -227,6 +236,7 @@
                 pad.position.y = 1.81;
                 group.add(pad);
 
+                // لافتة اسم البوفيه
                 const canvas = document.createElement('canvas');
                 canvas.width = 512; canvas.height = 140;
                 const ctx = canvas.getContext('2d');
@@ -249,6 +259,7 @@
             });
         }
 
+        // تصميم معدة Kalmar Reachstacker
         function buildReachStacker() {
             vehicle = new THREE.Group();
 
@@ -256,18 +267,18 @@
             const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.6, metalness: 0.4 });
             const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x223344, transparent: true, opacity: 0.65, roughness: 0.1 });
 
-            // الشاسيه
+            // 1. جسم وشاسيه الرافعة
             const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.2, 9.5), kalmarRed);
             chassis.position.y = 2.0;
             chassis.castShadow = true;
             vehicle.add(chassis);
 
-            // كابينة السائق
+            // 2. كابينة السائق Kalmar EGO Cabin
             const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.0, 2.4), glassMat);
             cabin.position.set(0, 3.6, -1.2);
             vehicle.add(cabin);
 
-            // العجلات
+            // 3. العجلات الصناعية الضخمة
             const wheelGeo = new THREE.CylinderGeometry(1.2, 1.2, 1.0, 24);
             const wheelPos = [
                 [-2.4, 1.2, 3.2], [2.4, 1.2, 3.2],
@@ -281,7 +292,7 @@
                 vehicle.add(w);
             });
 
-            // الذراع
+            // 4. الذراع التلسكوبي (Boom)
             boom = new THREE.Group();
             boom.position.set(0, 3.6, -2.8);
 
@@ -290,14 +301,14 @@
             arm.castShadow = true;
             boom.add(arm);
 
-            // الممسك (Spreader)
+            // 5. الـ Spreader (ممسك الحاويات)
             spreader = new THREE.Group();
             spreader.position.set(0, 0, 10.5);
 
             const spreaderHead = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.5, 7.0), darkMetal);
             spreader.add(spreaderHead);
 
-            // الحاوية
+            // 6. حاوية البوفيه المحمولة
             containerBox = new THREE.Mesh(
                 new THREE.BoxGeometry(3.4, 3.2, 8.0),
                 new THREE.MeshStandardMaterial({ color: 0xbf171e, roughness: 0.4 })
@@ -313,6 +324,7 @@
             scene.add(vehicle);
         }
 
+        // حركة وفيزياء المعدة
         let speed = 0;
         let rotSpeed = 0;
         let boomAngle = 0.18;
@@ -336,6 +348,7 @@
             spreader.rotation.x = -boomAngle;
         }
 
+        // التحقق من تسليم الحاوية
         function tryDeliverContainer() {
             if (containerDelivered) return;
 
