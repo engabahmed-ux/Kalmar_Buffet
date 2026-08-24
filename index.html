@@ -130,7 +130,7 @@
     </div>
 
     <div id="canvas-container"></div>
-    <div id="cam-hint">🖱️ اسحب الماوس لتدوير زاوية الرؤية | الالتقاط التلقائي الذكي مفعّل</div>
+    <div id="cam-hint">🖱️ اسحب الماوس لتدوير زاوية الرؤية | محاذاة دقيقة مطلوبة للالتقاط</div>
 
     <div id="hud">
         <div class="hud-card">
@@ -315,7 +315,7 @@
             targetStation = STATIONS.find(s => s.id === id);
             document.getElementById('selected-drink-txt').innerText = targetStation.name;
             document.getElementById('menu-modal').style.display = 'none';
-            showAlert(`قرّب الماسكة فوق الحاوية وسيتم القفل التلقائي الذكي فوراً! ثم توجه إلى: ${targetStation.name}`, "#ffca28");
+            showAlert(`اضبط الماسكة فوق الحاوية بدقة ثم ارفعها وتوجه إلى: ${targetStation.name}`, "#ffca28");
         }
 
         function showAlert(msg, color = "#ff9800") {
@@ -395,10 +395,10 @@
                 if (k === 's' || k === 'arrowdown' || k === 'س') keys.down = true;
                 if (k === 'a' || k === 'arrowleft' || k === 'ش') keys.left = true;
                 if (k === 'd' || k === 'arrowright' || k === 'ي') keys.right = true;
-                if (k === 'r' || k === 'ق') keys.liftUp = true;   // رفع لأعلى
-                if (k === 'f' || k === 'ب') keys.liftDown = true; // خفض لأسفل
-                if (k === 't' || k === 'ف') keys.teleOut = true;  // تمديد تلسكوب
-                if (k === 'g' || k === 'ل') keys.teleIn = true;   // تقصير تلسكوب
+                if (k === 'r' || k === 'ق') keys.liftUp = true;
+                if (k === 'f' || k === 'ب') keys.liftDown = true;
+                if (k === 't' || k === 'ف') keys.teleOut = true;
+                if (k === 'g' || k === 'ل') keys.teleIn = true;
                 if (e.code === 'Space' || k === 'e' || k === 'ث') toggleTwistlocks();
             });
 
@@ -525,9 +525,6 @@
             scene.add(cargoBox);
         }
 
-        // ==============================================
-        // 4. بناء الونش والميكانيزم
-        // ==============================================
         function buildRealisticKalmarReachstacker() {
             vehicle = new THREE.Group();
 
@@ -747,7 +744,7 @@
         }
 
         // ==============================================
-        // 6. المساعدة الذكية في الالتقاط التلقائي فور الوصول للشكل المطلوب
+        // 6. المساعدة في الالتقاط التلقائي بنسبة دقيقة ومتزنة
         // ==============================================
         function checkAutoLockProximity() {
             if (isCargoLocked || !targetStation) return;
@@ -761,8 +758,8 @@
             const horizDist = Math.hypot(spreaderWorldPos.x - cargoWorldPos.x, spreaderWorldPos.z - cargoWorldPos.z);
             const heightDiff = Math.abs(spreaderWorldPos.y - (cargoWorldPos.y + CONTAINER_DIMS.height / 2 + 0.4));
 
-            // عند الوصول للمحاذاة الموضحة بالصورة المرفقة (فوق الحاوية مباشرة) يتم القفل التلقائي الذكي فوراً
-            if (horizDist < 2.0 && heightDiff < 0.75) {
+            // تقليل مسافة المساعدة لتكون دقيقة وممتعة (تتطلب وزن الونش بدقة فوق الحاوية مباشرة)
+            if (horizDist < 0.65 && heightDiff < 0.25) {
                 lockContainer();
             }
         }
@@ -778,7 +775,7 @@
 
             isCargoLocked = true;
             audio.playTwistlock(true);
-            showAlert(`🔒 تم القفل التلقائي الذكي للتويستلوك بنجاح! ارفع الذراع وتوجه إلى: ${targetStation.name}`, "#00e676");
+            showAlert(`🔒 تم إدخال وقفل الـ Twistlocks بنجاح! ارفع الذراع وتوجه إلى: ${targetStation.name}`, "#00e676");
         }
 
         let speed = 0;
@@ -787,12 +784,20 @@
         function updateVehicle() {
             if (!targetStation) return;
 
+            // السرعة للأمام وللخلف
             if (keys.up) speed = Math.min(speed + 0.015, 0.26);
             else if (keys.down) speed = Math.max(speed - 0.015, -0.16);
             else speed *= 0.88;
 
-            if (keys.left) steer += 0.028;
-            if (keys.right) steer -= 0.028;
+            // ==============================================
+            // تعديل اتجاه التوجيه أثناء الرجوع للخلف (Reverse Steering Logic):
+            // أثناء الرجوع للخلف (speed < 0)، ينعكس اتجاه التفاف الشاسيه ليطابق القيادة الواقعية للسيارات والمعدات ذات التوجيه الخلفي
+            // ==============================================
+            const isReversing = speed < -0.01 || keys.down;
+            const steerDirection = isReversing ? -1 : 1;
+
+            if (keys.left) steer += 0.028 * steerDirection;
+            if (keys.right) steer -= 0.028 * steerDirection;
 
             const nextX = vehicle.position.x + Math.sin(steer) * speed;
             const nextZ = vehicle.position.z + Math.cos(steer) * speed;
@@ -808,11 +813,11 @@
 
             let isHyd = false;
             if (keys.liftUp && boomAngle < 0.52) {
-                boomAngle += 0.005; // رفع لأعلى
+                boomAngle += 0.005;
                 isHyd = true;
             }
             if (keys.liftDown && boomAngle > 0.0) {
-                boomAngle -= 0.005; // خفض لأسفل
+                boomAngle -= 0.005;
                 isHyd = true;
             }
 
@@ -833,7 +838,6 @@
 
             updateHydraulicPistons();
 
-            // فحص الالتقاط التلقائي الذكي
             checkAutoLockProximity();
 
             audio.setEngineSpeed(speed / 0.26);
@@ -850,6 +854,19 @@
             if (!targetStation) return;
 
             if (!isCargoLocked) {
+                const spreaderWorldPos = new THREE.Vector3();
+                spreaderGroup.getWorldPosition(spreaderWorldPos);
+
+                const cargoWorldPos = new THREE.Vector3();
+                cargoBox.getWorldPosition(cargoWorldPos);
+
+                const horizDist = Math.hypot(spreaderWorldPos.x - cargoWorldPos.x, spreaderWorldPos.z - cargoWorldPos.z);
+                const heightDiff = Math.abs(spreaderWorldPos.y - (cargoWorldPos.y + CONTAINER_DIMS.height / 2 + 0.4));
+
+                if (horizDist > 1.2 || heightDiff > 0.45) {
+                    showAlert("⚠️ اضبط الماسكة فوق الحاوية وتأكد من محاذاة الفتحات الأربع بدقة.");
+                    return;
+                }
                 lockContainer();
             } else {
                 const cargoWorldPos = new THREE.Vector3();
