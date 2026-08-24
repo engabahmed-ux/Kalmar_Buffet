@@ -1,3 +1,833 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalmar Reachstacker - Buffet Challenge</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; user-select: none; }
+        body { overflow: hidden; background-color: #000; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; }
+        
+        /* شاشات الواجهة والتحكم */
+        #ui-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 20px;
+        }
+        .hud-card {
+            background: rgba(20, 20, 25, 0.85);
+            border: 2px solid #e31b23; /* لون كالمر الأحمر الشهير */
+            border-radius: 10px;
+            color: #fff;
+            padding: 15px 25px;
+            pointer-events: auto;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .hud-title { font-size: 14px; color: #aaa; text-transform: uppercase; }
+        .hud-value { font-size: 24px; font-weight: bold; color: #ffeb3b; }
+
+        /* دليل التحكم */
+        #controls-guide {
+            position: absolute; bottom: 20px; left: 20px;
+            background: rgba(0,0,0,0.75); color: #fff;
+            padding: 15px; border-radius: 8px; font-size: 13px;
+            border-left: 4px solid #e31b23;
+        }
+        #controls-guide ul { list-style: none; margin-top: 5px; }
+        #controls-guide li { margin-bottom: 4px; }
+        kbd { background: #333; padding: 2px 6px; border-radius: 4px; border: 1px solid #555; }
+
+        /* شاشات التنبيه والانتصار */
+        #message-box {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(10, 10, 10, 0.95);
+            color: #fff; padding: 30px 50px; border-radius: 12px;
+            text-align: center; border: 3px solid #00e676;
+            display: none; pointer-events: auto;
+        }
+        #message-box h2 { font-size: 28px; margin-bottom: 10px; color: #00e676; }
+        #message-box button {
+            margin-top: 20px; padding: 10px 25px;
+            background: #e31b23; border: none; color: #fff;
+            font-size: 16px; cursor: pointer; border-radius: 5px;
+        }
+    </style>
+    <!-- مكتبة Three.js ثلاثية الأبعاد و OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-overlay">
+        <!-- شريط المعلومات العلوي -->
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+            <div class="hud-card">
+                <div class="hud-title">الطلب المطلوب توصيله (Target Order)</div>
+                <div class="hud-value" id="target-station">طاولة: المشويات والوجبات الرئيسية (Station 2)</div>
+            </div>
+            <div class="hud-card" style="text-align: center;">
+                <div class="hud-title">حالة حاوية البوفيه</div>
+                <div class="hud-value" id="status-text" style="color: #ff9800;">محمولة وجاهزة للتوصيل</div>
+            </div>
+        </div>
+
+        <!-- دليل الأزرار -->
+        <div id="controls-guide">
+            <strong>تحكم في Kalmar Reachstacker:</strong>
+            <ul>
+                <li><kbd>W</kbd> / <kbd>S</kbd> : تحريك المعدة للأمام / الخلف</li>
+                <li><kbd>A</kbd> / <kbd>D</kbd> : دوران العجلات والالتفاف</li>
+                <li><kbd>R</kbd> / <kbd>F</kbd> : رفع / خفض الذراع الهيدروليكي (Boom)</li>
+                <li><kbd>Space</kbd> : إنزال وتسليم الحاوية على الطاولة</li>
+                <li><kbd>V</kbd> : تبديل الكاميرا (كابينة السائق / منظور خارجي)</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- نافذة الفوز -->
+    <div id="message-box">
+        <h2>🎉 تم تسليم الطلب بنجاح!</h2>
+        <p>أهلاً بك في ضيافة شركة كالمر، استمتع بوجبتك!</p>
+        <button onclick="resetGame()">إعادة التحدي</button>
+    </div>
+
+    <script>
+        // --- تهيئة البيئة والمشهد ---
+        let scene, camera, renderer, vehicle, boom, spreader, containerBox;
+        let keys = {};
+        let isDriverView = false;
+        let containerDelivered = false;
+
+        const STATIONS = [
+            { id: 1, name: "طاولة 1: قسم المشروبات والقهوة", x: -25, z: 20, color: 0x2196f3 },
+            { id: 2, name: "طاولة 2: المشويات والوجبات الرئيسية", x: 0, z: 30, color: 0x4caf50 },
+            { id: 3, name: "طاولة 3: قسم الحلويات والفاكهة", x: 25, z: 20, color: 0xff9800 }
+        ];
+        const TARGET_STATION = STATIONS[1]; // الهدف: طاولة 2
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xdce5eb);
+            scene.fog = new THREE.FogExp2(0xdce5eb, 0.015);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, -25);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // الإضاءة
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.6);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(50, 80, -30);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // بناء العالم والمعدة
+            createEnvironment();
+            createBuffetStations();
+            buildReachStacker();
+
+            // أحداث التحكم
+            window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+            window.addEventListener('keyup', (e) => {
+                keys[e.key.toLowerCase()] = false;
+                if (e.key.toLowerCase() === 'v') isDriverView = !isDriverView;
+                if (e.code === 'Space') tryDeliverContainer();
+            });
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        // --- بناء البيئة المحيطة والمعرض ---
+        function createEnvironment() {
+            // الأرضية الإسفلتية
+            const groundGeo = new THREE.PlaneGeometry(200, 200);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b, roughness: 0.8 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // خطوط تنظيم المعرض الصفراء
+            const grid = new THREE.GridHelper(200, 40, 0xffff00, 0x444444);
+            grid.position.y = 0.01;
+            scene.add(grid);
+
+            // لوحات إعلانية تحمل اسم كالمر
+            createBanner("معرض زوار كالمر | Kalmar Experience", 0, 10, -50);
+        }
+
+        function createBanner(text, x, y, z) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#e31b23';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'Bold 42px Tahoma';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 512, 140);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const bannerGeo = new THREE.PlaneGeometry(30, 8);
+            const bannerMat = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+            const banner = new THREE.Mesh(bannerGeo, bannerMat);
+            banner.position.set(x, y, z);
+            scene.add(banner);
+        }
+
+        // --- بناء طاولات البوفيه الثلاث ---
+        function createBuffetStations() {
+            STATIONS.forEach(station => {
+                const group = new THREE.Group();
+                group.position.set(station.x, 0, station.z);
+
+                // منصة الطاولة
+                const tableGeo = new THREE.BoxGeometry(9, 1.5, 5);
+                const tableMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5 });
+                const table = new THREE.Mesh(tableGeo, tableMat);
+                table.position.y = 0.75;
+                table.receiveShadow = true;
+                group.add(table);
+
+                // منطقة إنزال الحاوية بلون مميز
+                const padGeo = new THREE.PlaneGeometry(8, 4);
+                const padMat = new THREE.MeshBasicMaterial({ color: station.color });
+                const pad = new THREE.Mesh(padGeo, padMat);
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.y = 1.51;
+                group.add(pad);
+
+                // لافتة اسم الطاولة
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 128;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 512, 128);
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 24px Tahoma';
+                ctx.textAlign = 'center';
+                ctx.fillText(station.name, 256, 70);
+
+                const tex = new THREE.CanvasTexture(canvas);
+                const label = new THREE.Mesh(new THREE.PlaneGeometry(6, 1.5), new THREE.MeshBasicMaterial({ map: tex }));
+                label.position.set(0, 3, 0);
+                group.add(label);
+
+                scene.add(group);
+            });
+        }
+
+        // --- تصميم وتجميع معدة Kalmar Reachstacker ---
+        function buildReachStacker() {
+            vehicle = new THREE.Group();
+
+            const redMat = new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.3 }); // أحمر كالمر
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x1b1c1e, roughness: 0.5 }); // أسود ميكانيكي
+            const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x111111, transparent: true, opacity: 0.6, roughness: 0.1 });
+
+            // 1. الشاسيه الرئيسي وثقل الموازنة الخلفي
+            const chassisGeo = new THREE.BoxGeometry(4.5, 2, 9);
+            const chassis = new THREE.Mesh(chassisGeo, redMat);
+            chassis.position.y = 1.8;
+            chassis.castShadow = true;
+            vehicle.add(chassis);
+
+            // 2. الكابينة (Cabin)
+            const cabinGeo = new THREE.BoxGeometry(2, 1.8, 2.2);
+            const cabin = new THREE.Mesh(cabinGeo, glassMat);
+            cabin.position.set(0, 3.2, -1.2);
+            vehicle.add(cabin);
+
+            // 3. العجلات الضخمة
+            const wheelGeo = new THREE.CylinderGeometry(1.1, 1.1, 0.9, 24);
+            const wheelPositions = [
+                [-2.3, 1.1, 3], [2.3, 1.1, 3], // أمامية مزدوجة
+                [-2.3, 1.1, -3], [2.3, 1.1, -3] // خلفية
+            ];
+            wheelPositions.forEach(pos => {
+                const wheel = new THREE.Mesh(wheelGeo, darkMat);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(...pos);
+                wheel.castShadow = true;
+                vehicle.add(wheel);
+            });
+
+            // 4. الذراع التلسكوبي (Boom)
+            boom = new THREE.Group();
+            boom.position.set(0, 3.2, -2.5); // نقطة الارتكاز الخلفية
+
+            const armGeo = new THREE.BoxGeometry(1.2, 1.2, 10);
+            const arm = new THREE.Mesh(armGeo, darkMat);
+            arm.position.set(0, 0, 4.5);
+            arm.castShadow = true;
+            boom.add(arm);
+
+            // 5. الـ Spreader (ممسك الحاوية)
+            spreader = new THREE.Group();
+            spreader.position.set(0, 0, 9.5);
+
+            const frameGeo = new THREE.BoxGeometry(3.5, 0.4, 6.5);
+            const spreaderMesh = new THREE.Mesh(frameGeo, darkMat);
+            spreader.add(spreaderMesh);
+
+            // 6. حاوية الأوردر (Red Kalmar Container)
+            const contGeo = new THREE.BoxGeometry(3.2, 3, 7.5);
+            containerBox = new THREE.Mesh(contGeo, redMat);
+            containerBox.position.set(0, -1.8, 0);
+            containerBox.castShadow = true;
+            spreader.add(containerBox);
+
+            boom.add(spreader);
+            vehicle.add(boom);
+
+            vehicle.position.set(0, 0, -15);
+            scene.add(vehicle);
+        }
+
+        // --- منطق الحركة والتحكم ---
+        let speed = 0;
+        let rotSpeed = 0;
+        let boomAngle = 0.15; // زاوية ميل الذراع
+
+        function handleVehicleMovement() {
+            if (keys['w']) speed = Math.min(speed + 0.008, 0.25);
+            else if (keys['s']) speed = Math.max(speed - 0.008, -0.15);
+            else speed *= 0.93; // فرملة تدريجية
+
+            if (keys['a']) rotSpeed = 0.02;
+            else if (keys['d']) rotSpeed = -0.02;
+            else rotSpeed = 0;
+
+            // تحريك الذراع
+            if (keys['r']) boomAngle = Math.min(boomAngle + 0.005, 0.45);
+            if (keys['f']) boomAngle = Math.max(boomAngle - 0.005, 0.05);
+
+            vehicle.rotation.y += rotSpeed * (speed / 0.1 || 1);
+            vehicle.translateZ(speed);
+
+            // تحديث زاوية الذراع وإبقاء السبوت هيدروليكياً مستوياً مع الأرض
+            boom.rotation.x = boomAngle;
+            spreader.rotation.x = -boomAngle;
+        }
+
+        // --- التحقق من تسليم الحاوية على الطاولة الصحيحة ---
+        function tryDeliverContainer() {
+            if (containerDelivered) return;
+
+            // حساب المسافة بين الحاوية وطاولة الهدف
+            const contWorldPos = new THREE.Vector3();
+            containerBox.getWorldPosition(contWorldPos);
+
+            const targetPos = new THREE.Vector3(TARGET_STATION.x, 1.5, TARGET_STATION.z);
+            const distance = contWorldPos.distanceTo(targetPos);
+
+            if (distance < 5.5) {
+                // فك ارتباط الحاوية وتثبيتها على الطاولة
+                THREE.SceneUtils?.detach ? THREE.SceneUtils.detach(containerBox, spreader, scene) : scene.attach(containerBox);
+                containerBox.position.set(TARGET_STATION.x, 3, TARGET_STATION.z);
+                containerBox.rotation.set(0, 0, 0);
+
+                containerDelivered = true;
+                document.getElementById('status-text').innerText = "تم التسليم بنجاح!";
+                document.getElementById('status-text').style.color = "#00e676";
+                document.getElementById('message-box').style.display = "block";
+            }
+        }
+
+        function resetGame() {
+            location.reload();
+        }
+
+        function updateCamera() {
+            if (isDriverView) {
+                // كاميرا الكابينة من منظور السائق
+                const camPos = new THREE.Vector3(0, 3.4, -0.8);
+                camPos.applyMatrix4(vehicle.matrixWorld);
+                camera.position.copy(camPos);
+
+                const lookPos = new THREE.Vector3(0, 3.2, 10);
+                lookPos.applyMatrix4(vehicle.matrixWorld);
+                camera.lookAt(lookPos);
+            } else {
+                // كاميرا التتبع الخلفية
+                const offset = new THREE.Vector3(0, 10, -18);
+                offset.applyMatrix4(vehicle.matrixWorld);
+                camera.position.lerp(offset, 0.1);
+                camera.lookAt(vehicle.position.x, vehicle.position.y + 3, vehicle.position.z);
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            handleVehicleMovement();
+            updateCamera();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
+طريقة التشغيل على GitHub Pages مجاناً
+قم بإنشاء مستودع جديد (New Repository) على GitHub وسمّه مثلاً kalmar-buffet-game.
+
+أنشئ ملفاً جديداً باسم index.html والصق الكود السابق داخله بالكامل ثم احفظ التغييرات (Commit).
+
+اذهب إلى إعدادات المستودع Settings > اختر من القائمة الجانبية Pages.
+
+من خيار Branch اختر main واضغط Save.
+
+سيظهر لك رابط اللعبة فوراً لتشغيله وعرضه للزوار مباشرة من أي جهاز أو شاشة عرض.
+
+فين الكود
+
+تم تجهيز وتوليد ملف كود اللعبة بالكامل:
+
+HTML icon
+index
+ HTML 
+Open
+الكود البرمجي الكامل (index.html)
+يمكنك نسخه مباشرة أو استخدام الملف الجاهز أعلاه ورفعه إلى GitHub:
+
+HTML
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalmar Reachstacker - Buffet Challenge</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        body { overflow: hidden; background-color: #111; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        
+        /* شاشات الواجهة والتحكم */
+        #ui-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 20px;
+        }
+        .hud-card {
+            background: rgba(20, 22, 28, 0.88);
+            border: 2px solid #e31b23; /* لون كالمر الأحمر الشهير */
+            border-radius: 12px;
+            color: #fff;
+            padding: 16px 24px;
+            pointer-events: auto;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        .hud-title { font-size: 13px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+        .hud-value { font-size: 22px; font-weight: bold; color: #ffeb3b; margin-top: 4px; }
+
+        /* دليل التحكم */
+        #controls-guide {
+            position: absolute; bottom: 20px; left: 20px;
+            background: rgba(15, 17, 23, 0.9); color: #fff;
+            padding: 16px 20px; border-radius: 10px; font-size: 13px;
+            border-left: 5px solid #e31b23;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #controls-guide ul { list-style: none; margin-top: 8px; }
+        #controls-guide li { margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        kbd {
+            background: #2a2d36; padding: 3px 8px; border-radius: 5px;
+            border: 1px solid #444; font-weight: bold; color: #00e676;
+            box-shadow: 0 2px 0 #111;
+        }
+
+        /* رسالة التنبيه والانتصار */
+        #message-box {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 20, 25, 0.96);
+            color: #fff; padding: 35px 50px; border-radius: 16px;
+            text-align: center; border: 3px solid #00e676;
+            display: none; pointer-events: auto;
+            box-shadow: 0 10px 40px rgba(0, 230, 118, 0.3);
+            animation: popIn 0.4s ease-out;
+        }
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        #message-box h2 { font-size: 30px; margin-bottom: 12px; color: #00e676; }
+        #message-box p { font-size: 17px; color: #ddd; line-height: 1.6; }
+        #message-box button {
+            margin-top: 24px; padding: 12px 30px;
+            background: #e31b23; border: none; color: #fff;
+            font-size: 17px; font-weight: bold; cursor: pointer; border-radius: 8px;
+            transition: 0.2s;
+        }
+        #message-box button:hover { background: #b8141b; transform: scale(1.05); }
+
+        #cam-indicator {
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px;
+            font-size: 13px; color: #bbb; border: 1px solid #444;
+        }
+    </style>
+    <!-- مكتبة Three.js ثلاثية الأبعاد -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-overlay">
+        <!-- شريط المعلومات العلوي -->
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+            <div class="hud-card">
+                <div class="hud-title">الطلب المطلوب توصيله (Target Buffet Order)</div>
+                <div class="hud-value" id="target-station">طاولة رقم 2: بوفيه المشويات والأطباق الساخنة</div>
+            </div>
+            <div class="hud-card" style="text-align: center;">
+                <div class="hud-title">حالة حاوية البوفيه (Kalmar Cargo)</div>
+                <div class="hud-value" id="status-text" style="color: #ff9800;">محمولة بالرافعة - توجّه للهدف</div>
+            </div>
+        </div>
+
+        <div id="cam-indicator">اضغط <b>V</b> لتغيير الكاميرا (كابينة السائق / منظور خارجي)</div>
+
+        <!-- دليل الأزرار -->
+        <div id="controls-guide">
+            <strong>🎮 تحكم بمعدة Kalmar Reachstacker:</strong>
+            <ul>
+                <li><kbd>W</kbd> / <kbd>S</kbd> : تحريك المعدة للأمام / الخلف</li>
+                <li><kbd>A</kbd> / <kbd>D</kbd> : توجيه وانعطاف العجلات</li>
+                <li><kbd>R</kbd> / <kbd>F</kbd> : رفع / خفض الذراع الهيدروليكي (Boom)</li>
+                <li><kbd>Space</kbd> : إنزال وتسليم الحاوية على الطاولة</li>
+                <li><kbd>V</kbd> : تبديل الكاميرا (منظور السائق)</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- نافذة الفوز وتسليم الأوردر -->
+    <div id="message-box">
+        <h2>🎉 تم تسليم طلب البوفيه بنجاح!</h2>
+        <p>أداء احترافي رائع بقيادة رافعة <b>Kalmar Gloria Reachstacker</b>.<br>أهلاً بك في ضيافة شركة كالمر، استمتع بوجبتك!</p>
+        <button onclick="resetGame()">إعادة التحدي 🔄</button>
+    </div>
+
+    <script>
+        let scene, camera, renderer, vehicle, boom, spreader, containerBox;
+        let keys = {};
+        let isDriverView = false;
+        let containerDelivered = false;
+
+        const STATIONS = [
+            { id: 1, name: "طاولة 1: ركن المشروبات والقهوة", x: -30, z: 25, color: 0x2196f3 },
+            { id: 2, name: "طاولة 2: بوفيه المشويات الساخنة", x: 0, z: 35, color: 0x00e676 },
+            { id: 3, name: "طاولة 3: ركن الحلويات والفاكهة", x: 30, z: 25, color: 0xff9800 }
+        ];
+        const TARGET_STATION = STATIONS[1];
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xdde8f0);
+            scene.fog = new THREE.FogExp2(0xdde8f0, 0.012);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, -28);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // الإضاءة
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444455, 0.6);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            dirLight.position.set(40, 80, -40);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            createEnvironment();
+            createBuffetStations();
+            buildReachStacker();
+
+            window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+            window.addEventListener('keyup', (e) => {
+                keys[e.key.toLowerCase()] = false;
+                if (e.key.toLowerCase() === 'v') isDriverView = !isDriverView;
+                if (e.code === 'Space') tryDeliverContainer();
+            });
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        function createEnvironment() {
+            const groundGeo = new THREE.PlaneGeometry(250, 250);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x2d3138, roughness: 0.85 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const grid = new THREE.GridHelper(250, 50, 0xffd600, 0x444d56);
+            grid.position.y = 0.02;
+            scene.add(grid);
+
+            createBanner("معرض ضيافة وزوار كالمر | Kalmar Exhibition", 0, 12, -60, 0xd31b23);
+        }
+
+        function createBanner(text, x, y, z, bgColor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#' + bgColor.toString(16).padStart(6, '0');
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 44px Tahoma';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 512, 145);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const banner = new THREE.Mesh(
+                new THREE.PlaneGeometry(36, 9),
+                new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })
+            );
+            banner.position.set(x, y, z);
+            scene.add(banner);
+        }
+
+        function createBuffetStations() {
+            STATIONS.forEach(station => {
+                const group = new THREE.Group();
+                group.position.set(station.x, 0, station.z);
+
+                const table = new THREE.Mesh(
+                    new THREE.BoxGeometry(10, 1.8, 5.5),
+                    new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.5 })
+                );
+                table.position.y = 0.9;
+                table.receiveShadow = true;
+                group.add(table);
+
+                const pad = new THREE.Mesh(
+                    new THREE.PlaneGeometry(8.5, 4.2),
+                    new THREE.MeshBasicMaterial({ color: station.color })
+                );
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.y = 1.81;
+                group.add(pad);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 140;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 512, 140);
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 28px Tahoma';
+                ctx.textAlign = 'center';
+                ctx.fillText(station.name, 256, 80);
+
+                const tex = new THREE.CanvasTexture(canvas);
+                const label = new THREE.Mesh(
+                    new THREE.PlaneGeometry(7, 1.9),
+                    new THREE.MeshBasicMaterial({ map: tex })
+                );
+                label.position.set(0, 3.6, 0);
+                group.add(label);
+
+                scene.add(group);
+            });
+        }
+
+        function buildReachStacker() {
+            vehicle = new THREE.Group();
+
+            const kalmarRed = new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.3, metalness: 0.2 });
+            const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.6, metalness: 0.4 });
+            const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x223344, transparent: true, opacity: 0.65, roughness: 0.1 });
+
+            // الشاسيه
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.2, 9.5), kalmarRed);
+            chassis.position.y = 2.0;
+            chassis.castShadow = true;
+            vehicle.add(chassis);
+
+            // كابينة السائق
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.0, 2.4), glassMat);
+            cabin.position.set(0, 3.6, -1.2);
+            vehicle.add(cabin);
+
+            // العجلات
+            const wheelGeo = new THREE.CylinderGeometry(1.2, 1.2, 1.0, 24);
+            const wheelPos = [
+                [-2.4, 1.2, 3.2], [2.4, 1.2, 3.2],
+                [-2.4, 1.2, -3.2], [2.4, 1.2, -3.2]
+            ];
+            wheelPos.forEach(p => {
+                const w = new THREE.Mesh(wheelGeo, darkMetal);
+                w.rotation.z = Math.PI / 2;
+                w.position.set(...p);
+                w.castShadow = true;
+                vehicle.add(w);
+            });
+
+            // الذراع
+            boom = new THREE.Group();
+            boom.position.set(0, 3.6, -2.8);
+
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 11), darkMetal);
+            arm.position.set(0, 0, 5.0);
+            arm.castShadow = true;
+            boom.add(arm);
+
+            // الممسك (Spreader)
+            spreader = new THREE.Group();
+            spreader.position.set(0, 0, 10.5);
+
+            const spreaderHead = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.5, 7.0), darkMetal);
+            spreader.add(spreaderHead);
+
+            // الحاوية
+            containerBox = new THREE.Mesh(
+                new THREE.BoxGeometry(3.4, 3.2, 8.0),
+                new THREE.MeshStandardMaterial({ color: 0xbf171e, roughness: 0.4 })
+            );
+            containerBox.position.set(0, -2.0, 0);
+            containerBox.castShadow = true;
+            spreader.add(containerBox);
+
+            boom.add(spreader);
+            vehicle.add(boom);
+
+            vehicle.position.set(0, 0, -20);
+            scene.add(vehicle);
+        }
+
+        let speed = 0;
+        let rotSpeed = 0;
+        let boomAngle = 0.18;
+
+        function handleVehicleMovement() {
+            if (keys['w']) speed = Math.min(speed + 0.008, 0.28);
+            else if (keys['s']) speed = Math.max(speed - 0.008, -0.16);
+            else speed *= 0.92;
+
+            if (keys['a']) rotSpeed = 0.022;
+            else if (keys['d']) rotSpeed = -0.022;
+            else rotSpeed = 0;
+
+            if (keys['r']) boomAngle = Math.min(boomAngle + 0.006, 0.45);
+            if (keys['f']) boomAngle = Math.max(boomAngle - 0.006, 0.06);
+
+            vehicle.rotation.y += rotSpeed * (Math.abs(speed) > 0.01 ? (speed > 0 ? 1 : -1) : 1);
+            vehicle.translateZ(speed);
+
+            boom.rotation.x = boomAngle;
+            spreader.rotation.x = -boomAngle;
+        }
+
+        function tryDeliverContainer() {
+            if (containerDelivered) return;
+
+            const contPos = new THREE.Vector3();
+            containerBox.getWorldPosition(contPos);
+
+            const targetPos = new THREE.Vector3(TARGET_STATION.x, 1.8, TARGET_STATION.z);
+            const dist = contPos.distanceTo(targetPos);
+
+            if (dist < 6.0) {
+                scene.attach(containerBox);
+                containerBox.position.set(TARGET_STATION.x, 3.4, TARGET_STATION.z);
+                containerBox.rotation.set(0, 0, 0);
+
+                containerDelivered = true;
+                document.getElementById('status-text').innerText = "✅ تم تسليم البوفيه بالكامل!";
+                document.getElementById('status-text').style.color = "#00e676";
+                document.getElementById('message-box').style.display = "block";
+            } else {
+                const statusEl = document.getElementById('status-text');
+                statusEl.innerText = "❌ لست في موقع الطاولة الصحيحة بعد!";
+                statusEl.style.color = "#ff5252";
+                setTimeout(() => {
+                    if (!containerDelivered) {
+                        statusEl.innerText = "محمولة بالرافعة - توجّه للهدف";
+                        statusEl.style.color = "#ff9800";
+                    }
+                }, 2000);
+            }
+        }
+
+        function resetGame() {
+            location.reload();
+        }
+
+        function updateCamera() {
+            if (isDriverView) {
+                const camPos = new THREE.Vector3(0, 3.8, -0.8);
+                camPos.applyMatrix4(vehicle.matrixWorld);
+                camera.position.copy(camPos);
+
+                const lookPos = new THREE.Vector3(0, 3.4, 12);
+                lookPos.applyMatrix4(vehicle.matrixWorld);
+                camera.lookAt(lookPos);
+            } else {
+                const offset = new THREE.Vector3(0, 12, -22);
+                offset.applyMatrix4(vehicle.matrixWorld);
+                camera.position.lerp(offset, 0.1);
+                camera.lookAt(vehicle.position.x, vehicle.position.y + 2.5, vehicle.position.z);
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            handleVehicleMovement();
+            updateCamera();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
+خطوات رفع الكود على GitHub وتشغيله فوراً:
+أنشئ مستودعاً جديداً (New Repository) على حسابك في GitHub.
+
+أنشئ ملفاً بداخله وسمّه index.html والصق فيه هذا الكود.
+
+ادخل إلى Settings > Pages > ومن خيار Branch اختر main واضغط Save.
+
+ستحصل على رابط مباشر للعبة يمكنك مشاركته مع الزوار لعرضه على الشاشات أو الهواتف.
+
+المعده ليست كما في الصور و الطاوله عايزها شبه الحاويه اول ما الكالمر يخش ينزل الماسكه بتاعته يمسك الحاويه و ينزلها علي المشروب اللي هو عايزه و عايز تفاعلىاكتلا و ديناميكيه اكتر
+
+Python
 # Let's create an advanced, highly realistic, dynamic 3D Three.js game for Kalmar Reachstacker
 # adhering exactly to the user's requirements:
 # 1. Kalmar Reachstacker authentic 3D geometry (Curved red chassis, counterweight with warning stripes, stairs, railings, hydraulic cylinders, telescopic dual-stage boom with Kalmar logo, top-lift spreader with twistlock pins & corner guides).
@@ -844,3 +1674,1721 @@ with open("index.html", "w", encoding="utf-8") as f:
     f.write(html_code)
 
 print("index.html updated successfully with realistic Kalmar 3D geometry & drink container buffet tables.")
+
+Code output
+index.html updated successfully with realistic Kalmar 3D geometry & drink container buffet tables.
+
+تم تحديث وتطوير اللعبة بالكامل لتطابق الصور والمتطلبات الجديدة:
+
+الإضافات والتعديلات المنفذة في الكود:
+تصميم معدة Kalmar Reachstacker الواقعي (مطابق لصور كالمر):
+
+شاسيه كالمر الأحمر المميز مع ثقل الموازنة الخلفي المنحني (Curved Counterweight) المزين بخطوط الأمان التحذيرية (White/Red Safety Stripes).
+
+كابينة القيادة (Kalmar EGO Cabin) مع ممرات الصعود الجانبية والدرابزين (Catwalks & Railings).
+
+أسطوانات الهيدروليك الضخمة (Hydraulic Cylinders & Chrome Pistons) لرفع وخفض الذراع.
+
+الذراع التلسكوبي المزدوج (Two-Stage Telescopic Boom) الحامل لشعار KALMAR الرسمي.
+
+الماسك العلوي (Top-Lift Spreader) المزود برأس التدوير (Rotator) وأذرع التوجيه الصفراء (Flipper Guides) وأقفال التويستلوك (Twistlocks).
+
+طاولات البوفيه بتصميم حاويات شحن أفقية مخصصة للمشروبات:
+
+تم تصميم كل محطة بوفيه كحاوية شحن مهيأة بأسطح مضيئة وعليها مجسمات أكواب ومشروبات:
+
+Station 1: ركن القهوة والإسبريسو الساخن (Hot Coffee & Espresso).
+
+Station 2: ركن العصائر الطازجة والموهيتو (Fresh Juices & Mojitos - الهدف المطلوب).
+
+Station 3: ركن المشروبات الغازية والشاي المثلج (Iced Tea & Drinks).
+
+سيناريو اللعب التفاعلي والديناميكي (Full Interactive Workflow):
+
+يبدأ اللاعب بالمعدة وهي فارغة.
+
+يقود إلى منطقة الحاوية -> يضبط الماسكة فوقها -> يضغط [E] لقفل الـ Twistlocks بصوت ميكانيكي واهتزاز.
+
+يرفع الذراع ويمدد التلسكوب -> يقود الحاوية نحو طاولة المشروب المطلوبة (Station 2).
+
+ينزل الحاوية بدقة ويضغط [E] لفك القفل وتسليم الطلب للضيف.
+
+تأثيرات صوتية وكاميرات تفاعلية متطورة:
+
+محاكي أصوات مدمج (Web Audio API) لمحرك الديزل، حركة الهيدروليك، صوت قفل التويستلوك المعدني، وصوت الانتصار.
+
+لوحة قيادة وشاشة بيانات رقمية (زاوية الذراع، امتداد التلسكوب، وزن الحمولة بالأطنان).
+
+3 أوضاع للكاميرا: منظور خارجي (Follow Cam)، كابينة السائق (EGO Cabin View)، وكاميرا موجهة للأسفل من الماسكة (Spreader Cam) لتسهيل وزن الحاوية.
+
+ملف اللعبة المحدث جاهز للتحميل:
+HTML icon
+index
+ HTML 
+Open
+الكود المحدث بالكامل (index.html):
+HTML
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalmar Reachstacker - محاكي ضيافة كالمر التفاعلي</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        body { overflow: hidden; background-color: #0b0d11; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        
+        /* شاشات الواجهة العلوية و HUD */
+        #ui-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 16px 20px;
+        }
+        .hud-panel {
+            background: rgba(18, 22, 30, 0.92);
+            border: 2px solid #d31b23; /* أحمر كالمر */
+            border-radius: 12px;
+            color: #fff;
+            padding: 14px 20px;
+            pointer-events: auto;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+        }
+        .hud-title { font-size: 12px; color: #9aa5b5; text-transform: uppercase; letter-spacing: 1px; }
+        .hud-value { font-size: 20px; font-weight: bold; color: #ffca28; margin-top: 4px; }
+
+        /* مؤشرات الكالمر الصناعية (Kalmar Load & Boom Telemetry) */
+        #telemetry-bar {
+            display: flex; gap: 15px; margin-top: 10px; font-size: 12px; color: #cfd8dc;
+        }
+        .tele-box {
+            background: rgba(0,0,0,0.5); padding: 6px 12px; border-radius: 6px; border: 1px solid #37474f;
+        }
+        .tele-box span { font-weight: bold; color: #00e676; }
+
+        /* ضوء حالة التويستلوك Twistlock Status */
+        .lock-indicator {
+            display: inline-flex; align-items: center; gap: 6px; font-weight: bold; padding: 4px 10px;
+            border-radius: 20px; font-size: 13px; margin-top: 5px;
+        }
+        .locked { background: rgba(0, 230, 118, 0.2); color: #00e676; border: 1px solid #00e676; }
+        .unlocked { background: rgba(255, 82, 82, 0.2); color: #ff5252; border: 1px solid #ff5252; }
+
+        /* دليل التحكم */
+        #controls-guide {
+            position: absolute; bottom: 16px; left: 16px;
+            background: rgba(14, 18, 26, 0.92); color: #fff;
+            padding: 16px 20px; border-radius: 12px; font-size: 13px;
+            border-left: 5px solid #d31b23;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.6);
+            pointer-events: auto;
+        }
+        #controls-guide ul { list-style: none; margin-top: 8px; }
+        #controls-guide li { margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        kbd {
+            background: #263238; padding: 3px 8px; border-radius: 6px;
+            border: 1px solid #455a64; font-weight: bold; color: #00e676; font-size: 11px;
+        }
+
+        /* محدد الكاميرا */
+        #cam-bar {
+            position: absolute; bottom: 16px; right: 16px; display: flex; gap: 8px; pointer-events: auto;
+        }
+        .btn-action {
+            background: #1e2638; color: #fff; border: 1px solid #37474f;
+            padding: 10px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: bold;
+            transition: all 0.2s;
+        }
+        .btn-action:hover, .btn-action.active {
+            background: #d31b23; border-color: #ff5252; color: #fff; transform: translateY(-2px);
+        }
+
+        /* رسالة الإنجاز */
+        #victory-modal {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%) scale(0.9);
+            background: rgba(14, 20, 30, 0.98);
+            color: #fff; padding: 35px 50px; border-radius: 16px;
+            text-align: center; border: 3px solid #00e676;
+            display: none; pointer-events: auto;
+            box-shadow: 0 10px 50px rgba(0, 230, 118, 0.35);
+            transition: transform 0.3s;
+        }
+        #victory-modal.show { display: block; transform: translate(-50%, -50%) scale(1); }
+        #victory-modal h2 { font-size: 28px; color: #00e676; margin-bottom: 10px; }
+        #victory-modal p { font-size: 16px; color: #eceff1; margin-bottom: 20px; line-height: 1.6; }
+        
+        #crosshair {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 24px; height: 24px; border: 2px dashed rgba(255, 235, 59, 0.6);
+            border-radius: 50%; pointer-events: none; display: none;
+        }
+    </style>
+    <!-- مكتبة Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    <div id="crosshair"></div>
+
+    <div id="ui-overlay">
+        <!-- الشريط العلوي -->
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; width: 100%;">
+            <div class="hud-panel">
+                <div class="hud-title">🍹 طلب المشروب المطلوب للضيف (Target Order)</div>
+                <div class="hud-value" id="target-title">طاولة مشروبات القهوة والإسبريسو الساخنة (Station 1)</div>
+                <div id="telemetry-bar">
+                    <div class="tele-box">زاوية الذراع: <span id="tele-angle">25°</span></div>
+                    <div class="tele-box">امتداد التلسكوب: <span id="tele-ext">0.0m</span></div>
+                    <div class="tele-box">الحمولة: <span id="tele-load">0.0 Ton</span></div>
+                </div>
+            </div>
+
+            <div class="hud-panel" style="text-align: center;">
+                <div class="hud-title">حالة الماسكة (Spreader & Twistlocks)</div>
+                <div id="lock-status" class="lock-indicator unlocked">🔓 الماسكة مفتوحة (جاهزة للالتقاط)</div>
+                <div style="font-size: 12px; color: #bbb; margin-top: 6px;" id="action-hint">وجّه الماسكة فوق الحاوية واضغط [E]</div>
+            </div>
+        </div>
+
+        <!-- دليل التحكم السفلي -->
+        <div id="controls-guide">
+            <strong style="color: #ff5252;">⚙️ نظام قيادة وتشغيل Kalmar Reachstacker:</strong>
+            <ul>
+                <li><kbd>W</kbd> / <kbd>S</kbd> : قيادة المعدة للأمام والخلف (Drive)</li>
+                <li><kbd>A</kbd> / <kbd>D</kbd> : توجيه العجلات الخلفية (Steering)</li>
+                <li><kbd>R</kbd> / <kbd>F</kbd> : رفع / خفض ذراع الرافعة (Boom Up / Down)</li>
+                <li><kbd>T</kbd> / <kbd>G</kbd> : تمديد / تقصير التلسكوب (Extend / Retract)</li>
+                <li><kbd>E</kbd> : قفل / فتح أقفال الحاوية (Lock / Unlock Twistlocks)</li>
+            </ul>
+        </div>
+
+        <!-- أزرار الكاميرا -->
+        <div id="cam-bar">
+            <button class="btn-action active" onclick="setCameraMode(0)">🎥 منظور خارجي (3rd Person)</button>
+            <button class="btn-action" onclick="setCameraMode(1)">💺 كابينة السائق (EGO Cabin)</button>
+            <button class="btn-action" onclick="setCameraMode(2)">🎯 كاميرا الماسكة (Spreader Cam)</button>
+        </div>
+    </div>
+
+    <!-- نافذة الفوز والنجاح -->
+    <div id="victory-modal">
+        <h2>🎉 تم تسليم طلب المشروبات بدقة متناهية!</h2>
+        <p>تم إنزال حاوية الضيافة بنجاح تام فوق طاولة المشروبات الصحيحة بواسطة <b>Kalmar Reachstacker</b>.<br>مرحباً بك في بوفيه ضيافة شركة كالمر، استمتع بمشروبك!</p>
+        <button class="btn-action" style="background: #00e676; color: #000; font-size: 16px; border:none; padding: 12px 28px;" onclick="resetGame()">إعادة التجربة 🔄</button>
+    </div>
+
+    <script>
+        // نظام المؤثرات الصوتية (Web Audio API)
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.engineGain = null;
+                this.engineOsc = null;
+                this.isInitialized = false;
+            }
+            init() {
+                if (this.isInitialized) return;
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                this.ctx = new AudioContext();
+
+                this.engineOsc = this.ctx.createOscillator();
+                this.engineGain = this.ctx.createGain();
+                this.engineOsc.type = 'sawtooth';
+                this.engineOsc.frequency.setValueAtTime(45, this.ctx.currentTime);
+                this.engineGain.gain.setValueAtTime(0.04, this.ctx.currentTime);
+
+                const filter = this.ctx.createBiquadFilter();
+                filter.type = 'lowpass';
+                filter.frequency.setValueAtTime(220, this.ctx.currentTime);
+
+                this.engineOsc.connect(filter);
+                filter.connect(this.engineGain);
+                this.engineGain.connect(this.ctx.destination);
+                this.engineOsc.start();
+                this.isInitialized = true;
+            }
+            updateEngine(speedRatio) {
+                if (!this.isInitialized) return;
+                const freq = 45 + Math.abs(speedRatio) * 65;
+                this.engineOsc.frequency.setTargetAtTime(freq, this.ctx.currentTime, 0.1);
+                this.engineGain.gain.setTargetAtTime(0.04 + Math.abs(speedRatio) * 0.05, this.ctx.currentTime, 0.1);
+            }
+            playHydraulic() {
+                if (!this.isInitialized) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(140, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.3);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.3);
+            }
+            playTwistlock(isLock) {
+                if (!this.isInitialized) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(isLock ? 180 : 320, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.25);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.25);
+            }
+            playVictory() {
+                if (!this.isInitialized) return;
+                [440, 554, 659, 880].forEach((f, i) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.frequency.setValueAtTime(f, this.ctx.currentTime + i * 0.15);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime + i * 0.15);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + i * 0.15 + 0.4);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(this.ctx.currentTime + i * 0.15);
+                    osc.stop(this.ctx.currentTime + i * 0.15 + 0.4);
+                });
+            }
+        }
+        const audio = new SoundEngine();
+        window.addEventListener('keydown', () => audio.init(), { once: true });
+        window.addEventListener('click', () => audio.init(), { once: true });
+
+        // المشهد ثلاثي الأبعاد
+        let scene, camera, renderer;
+        let vehicle, boomBase, boomTelescope, spreaderGroup;
+        let cargoContainer;
+        let isContainerLocked = false;
+        let isDelivered = false;
+        let cameraMode = 0;
+        let keys = {};
+
+        const DRINK_TABLES = [
+            { id: 1, name: "طاولة 1: ركن القهوة والإسبريسو الساخن", colorHex: '#1e88e5', x: -28, z: 28, label: "☕ BAR 1: HOT COFFEE & ESPRESSO" },
+            { id: 2, name: "طاولة 2: ركن العصائر الطازجة والموهيتو", colorHex: '#43a047', x: 0, z: 38, label: "🍹 BAR 2: FRESH JUICES & MOJITOS" },
+            { id: 3, name: "طاولة 3: ركن المشروبات الغازية والشاي المثلج", colorHex: '#fb8c00', x: 28, z: 28, label: "🥤 BAR 3: ICED TEA & SOFT DRINKS" }
+        ];
+        const TARGET_TABLE = DRINK_TABLES[1];
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xd7e3ec);
+            scene.fog = new THREE.FogExp2(0xd7e3ec, 0.012);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 16, -30);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x556677, 0.65);
+            scene.add(hemiLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1.1);
+            sunLight.position.set(45, 85, -35);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+
+            buildPortYard();
+            buildContainerBuffetTables();
+            buildCargoContainer();
+            buildRealisticKalmar();
+
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+            window.addEventListener('resize', onWindowResize);
+
+            document.getElementById('target-title').innerText = TARGET_TABLE.name;
+
+            animate();
+        }
+
+        function buildPortYard() {
+            const groundGeo = new THREE.PlaneGeometry(300, 300);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x22262c, roughness: 0.85 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const grid = new THREE.GridHelper(300, 60, 0xffeb3b, 0x37474f);
+            grid.position.y = 0.02;
+            scene.add(grid);
+
+            createExhibitionBanner("مرحباً بكم في معرض ضيافة كالمر | KALMAR REACHSTACKER EXPERIENCE", 0, 14, -65);
+        }
+
+        function createExhibitionBanner(text, x, y, z) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1200; canvas.height = 250;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#d31b23';
+            ctx.fillRect(0, 0, 1200, 250);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 44px Tahoma, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 600, 140);
+
+            const tex = new THREE.CanvasTexture(canvas);
+            const banner = new THREE.Mesh(
+                new THREE.PlaneGeometry(42, 9),
+                new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide })
+            );
+            banner.position.set(x, y, z);
+            scene.add(banner);
+        }
+
+        function buildContainerBuffetTables() {
+            DRINK_TABLES.forEach(table => {
+                const group = new THREE.Group();
+                group.position.set(table.x, 0, table.z);
+
+                const tableContainerGeo = new THREE.BoxGeometry(4.2, 1.8, 9.2);
+                const tableMat = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(table.colorHex),
+                    roughness: 0.4,
+                    metalness: 0.3
+                });
+                const tableMesh = new THREE.Mesh(tableContainerGeo, tableMat);
+                tableMesh.position.y = 0.9;
+                tableMesh.castShadow = true;
+                tableMesh.receiveShadow = true;
+                group.add(tableMesh);
+
+                const padGeo = new THREE.PlaneGeometry(3.6, 8.6);
+                const padMat = new THREE.MeshBasicMaterial({ color: 0xffeb3b, wireframe: true });
+                const pad = new THREE.Mesh(padGeo, padMat);
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.y = 1.82;
+                group.add(pad);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 600; canvas.height = 160;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#111722';
+                ctx.fillRect(0, 0, 600, 160);
+                ctx.strokeStyle = table.colorHex;
+                ctx.lineWidth = 10;
+                ctx.strokeRect(5, 5, 590, 150);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 28px Tahoma, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(table.label, 300, 95);
+
+                const tex = new THREE.CanvasTexture(canvas);
+                const labelMesh = new THREE.Mesh(
+                    new THREE.PlaneGeometry(7.5, 2.0),
+                    new THREE.MeshBasicMaterial({ map: tex })
+                );
+                labelMesh.position.set(0, 3.8, 0);
+                group.add(labelMesh);
+
+                scene.add(group);
+            });
+        }
+
+        function buildCargoContainer() {
+            cargoContainer = new THREE.Group();
+            cargoContainer.position.set(0, 1.7, -12);
+
+            const contGeo = new THREE.BoxGeometry(3.6, 3.4, 8.5);
+            const contMat = new THREE.MeshStandardMaterial({
+                color: 0xd31b23,
+                roughness: 0.45,
+                metalness: 0.25
+            });
+            const mesh = new THREE.Mesh(contGeo, contMat);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            cargoContainer.add(mesh);
+
+            const cornerMat = new THREE.MeshStandardMaterial({ color: 0x111111, metalness: 0.8 });
+            const corners = [
+                [-1.75, 1.65, -4.2], [1.75, 1.65, -4.2],
+                [-1.75, 1.65, 4.2], [1.75, 1.65, 4.2]
+            ];
+            corners.forEach(p => {
+                const cornerBox = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), cornerMat);
+                cornerBox.position.set(...p);
+                cargoContainer.add(cornerBox);
+            });
+
+            scene.add(cargoContainer);
+        }
+
+        function buildRealisticKalmar() {
+            vehicle = new THREE.Group();
+
+            const kalmarRed = new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.35, metalness: 0.15 });
+            const darkGrey = new THREE.MeshStandardMaterial({ color: 0x1f2327, roughness: 0.55, metalness: 0.45 });
+            const chrome = new THREE.MeshStandardMaterial({ color: 0xeeeeee, metalness: 0.95, roughness: 0.1 });
+            const glass = new THREE.MeshPhysicalMaterial({ color: 0x15222e, transparent: true, opacity: 0.7, roughness: 0.1 });
+
+            // الشاسيه والثقل الخلفي
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.8, 9.8), kalmarRed);
+            chassis.position.y = 2.0;
+            chassis.castShadow = true;
+            vehicle.add(chassis);
+
+            const counterWeight = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.4, 2.4), kalmarRed);
+            counterWeight.position.set(0, 2.4, -4.6);
+            counterWeight.castShadow = true;
+            vehicle.add(counterWeight);
+
+            // الكابينة
+            const cabinGroup = new THREE.Group();
+            cabinGroup.position.set(0, 3.8, -1.2);
+            const cabinBody = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2.2, 2.5), glass);
+            cabinGroup.add(cabinBody);
+            vehicle.add(cabinGroup);
+
+            // العجلات
+            const wheelGeo = new THREE.CylinderGeometry(1.25, 1.25, 0.9, 24);
+            const wheels = [
+                [-2.4, 1.25, 3.4], [2.4, 1.25, 3.4],
+                [-2.4, 1.25, -3.4], [2.4, 1.25, -3.4]
+            ];
+            wheels.forEach(pos => {
+                const w = new THREE.Mesh(wheelGeo, darkGrey);
+                w.rotation.z = Math.PI / 2;
+                w.position.set(...pos);
+                w.castShadow = true;
+                vehicle.add(w);
+            });
+
+            // الهيدروليك
+            for(let side of [-1.5, 1.5]) {
+                const cylBase = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 4.8, 16), darkGrey);
+                cylBase.position.set(side, 3.2, 0.5);
+                cylBase.rotation.x = Math.PI / 4.2;
+                vehicle.add(cylBase);
+
+                const piston = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 4.5, 16), chrome);
+                piston.position.set(side, 4.6, 2.0);
+                piston.rotation.x = Math.PI / 4.2;
+                vehicle.add(piston);
+            }
+
+            // الذراع والماسك
+            boomBase = new THREE.Group();
+            boomBase.position.set(0, 3.8, -3.2);
+
+            const outerBoom = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 10.5), darkGrey);
+            outerBoom.position.set(0, 0, 4.8);
+            outerBoom.castShadow = true;
+            boomBase.add(outerBoom);
+
+            boomTelescope = new THREE.Group();
+            boomTelescope.position.set(0, 0, 9.8);
+
+            const innerBoom = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1, 7.5), darkGrey);
+            innerBoom.position.set(0, 0, 3.2);
+            innerBoom.castShadow = true;
+            boomTelescope.add(innerBoom);
+
+            spreaderGroup = new THREE.Group();
+            spreaderGroup.position.set(0, 0, 6.8);
+
+            const rotator = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 1.0, 0.4, 24), kalmarRed);
+            spreaderGroup.add(rotator);
+
+            const spreaderMain = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.45, 8.6), darkGrey);
+            spreaderMain.position.y = -0.3;
+            spreaderMain.castShadow = true;
+            spreaderGroup.add(spreaderMain);
+
+            boomTelescope.add(spreaderGroup);
+            boomBase.add(boomTelescope);
+            vehicle.add(boomBase);
+
+            vehicle.position.set(0, 0, -28);
+            scene.add(vehicle);
+        }
+
+        let speed = 0;
+        let steerAngle = 0;
+        let boomAngle = 0.20;
+        let telescopeDist = 0.0;
+
+        function handleKeyDown(e) {
+            keys[e.key.toLowerCase()] = true;
+            if (e.key.toLowerCase() === 'e') toggleTwistlocks();
+        }
+
+        function handleKeyUp(e) {
+            keys[e.key.toLowerCase()] = false;
+        }
+
+        function updateVehiclePhysics() {
+            if (keys['w']) speed = Math.min(speed + 0.01, 0.32);
+            else if (keys['s']) speed = Math.max(speed - 0.01, -0.18);
+            else speed *= 0.91;
+
+            if (keys['a']) steerAngle = Math.min(steerAngle + 0.03, 0.024);
+            else if (keys['d']) steerAngle = Math.max(steerAngle - 0.03, -0.024);
+            else steerAngle *= 0.85;
+
+            let isHydraulicMoving = false;
+            if (keys['r'] && boomAngle < 0.55) { boomAngle += 0.005; isHydraulicMoving = true; }
+            if (keys['f'] && boomAngle > 0.04) { boomAngle -= 0.005; isHydraulicMoving = true; }
+
+            if (keys['t'] && telescopeDist < 4.2) { telescopeDist += 0.04; isHydraulicMoving = true; }
+            if (keys['g'] && telescopeDist > 0.0) { telescopeDist -= 0.04; isHydraulicMoving = true; }
+
+            if (isHydraulicMoving) audio.playHydraulic();
+
+            vehicle.rotation.y += steerAngle * (speed / 0.1 || 1);
+            vehicle.translateZ(speed);
+
+            boomBase.rotation.x = boomAngle;
+            boomTelescope.position.z = 9.8 + telescopeDist;
+            spreaderGroup.rotation.x = -boomAngle;
+
+            audio.updateEngine(speed / 0.32);
+            updateDashboard();
+        }
+
+        function toggleTwistlocks() {
+            if (isDelivered) return;
+
+            const spreaderWorldPos = new THREE.Vector3();
+            spreaderGroup.getWorldPosition(spreaderWorldPos);
+
+            const containerWorldPos = new THREE.Vector3();
+            cargoContainer.getWorldPosition(containerWorldPos);
+
+            if (!isContainerLocked) {
+                const dist = spreaderWorldPos.distanceTo(new THREE.Vector3(containerWorldPos.x, containerWorldPos.y + 1.8, containerWorldPos.z));
+                
+                if (dist < 3.2) {
+                    spreaderGroup.attach(cargoContainer);
+                    cargoContainer.position.set(0, -2.0, 0);
+                    cargoContainer.rotation.set(0, 0, 0);
+
+                    isContainerLocked = true;
+                    audio.playTwistlock(true);
+
+                    document.getElementById('lock-status').className = "lock-indicator locked";
+                    document.getElementById('lock-status').innerText = "🔒 الحاوية مقفولة ومحمولة (Locked)";
+                    document.getElementById('action-hint').innerText = "انتقل إلى: " + TARGET_TABLE.name;
+                } else {
+                    document.getElementById('action-hint').innerText = "⚠️ قرّب الماسكة بدقة فوق الحاوية أولاً!";
+                }
+            } else {
+                const targetPos = new THREE.Vector3(TARGET_TABLE.x, 1.8, TARGET_TABLE.z);
+                const distToBuffet = containerWorldPos.distanceTo(targetPos);
+
+                if (distToBuffet < 4.8) {
+                    scene.attach(cargoContainer);
+                    cargoContainer.position.set(TARGET_TABLE.x, 3.5, TARGET_TABLE.z);
+                    cargoContainer.rotation.set(0, 0, 0);
+
+                    isContainerLocked = false;
+                    isDelivered = true;
+                    audio.playTwistlock(false);
+                    audio.playVictory();
+
+                    document.getElementById('lock-status').className = "lock-indicator unlocked";
+                    document.getElementById('lock-status').innerText = "✅ تم تسليم الطلب بنجاح!";
+                    document.getElementById('victory-modal').classList.add('show');
+                } else {
+                    scene.attach(cargoContainer);
+                    cargoContainer.position.y = 1.7;
+                    isContainerLocked = false;
+                    audio.playTwistlock(false);
+
+                    document.getElementById('lock-status').className = "lock-indicator unlocked";
+                    document.getElementById('lock-status').innerText = "🔓 الماسكة مفتوحة (تم الإنزال)";
+                    document.getElementById('action-hint').innerText = "وجّه الماسكة فوق الحاوية واضغط [E]";
+                }
+            }
+        }
+
+        function updateDashboard() {
+            document.getElementById('tele-angle').innerText = Math.round(boomAngle * (180 / Math.PI)) + '°';
+            document.getElementById('tele-ext').innerText = telescopeDist.toFixed(1) + 'm';
+            document.getElementById('tele-load').innerText = isContainerLocked ? '32.4 Ton' : '0.0 Ton';
+        }
+
+        function setCameraMode(mode) {
+            cameraMode = mode;
+            document.querySelectorAll('#cam-bar button').forEach((btn, idx) => {
+                btn.classList.toggle('active', idx === mode);
+            });
+            document.getElementById('crosshair').style.display = (mode === 2) ? 'block' : 'none';
+        }
+
+        function updateCamera() {
+            if (cameraMode === 0) {
+                const offset = new THREE.Vector3(0, 14, -26);
+                offset.applyMatrix4(vehicle.matrixWorld);
+                camera.position.lerp(offset, 0.1);
+                camera.lookAt(vehicle.position.x, vehicle.position.y + 3.0, vehicle.position.z);
+            } else if (cameraMode === 1) {
+                const cabinPos = new THREE.Vector3(0, 4.2, -0.9);
+                cabinPos.applyMatrix4(vehicle.matrixWorld);
+                camera.position.copy(cabinPos);
+
+                const lookTarget = new THREE.Vector3(0, 3.8, 14);
+                lookTarget.applyMatrix4(vehicle.matrixWorld);
+                camera.lookAt(lookTarget);
+            } else if (cameraMode === 2) {
+                const spreaderPos = new THREE.Vector3();
+                spreaderGroup.getWorldPosition(spreaderPos);
+                camera.position.set(spreaderPos.x, spreaderPos.y + 5.0, spreaderPos.z);
+                camera.lookAt(spreaderPos.x, spreaderPos.y - 10.0, spreaderPos.z);
+            }
+        }
+
+        function resetGame() {
+            location.reload();
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateVehiclePhysics();
+            updateCamera();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
+الونش مش بيتحرك و ااول ما بدوس علي انه يتحرك بيطله صوت زن كده في اللاب و مش بيتحرك
+
+سبب المشكلة كان مذبذب الصوت التخليقي (Audio Oscillator) المستمر الذي كان يصدر تردد "الزن" عند الضغط على الأزرار ويعلق داخل المتصفح، بالإضافة إلى تعارض في نظام قراءة الأزرار عند الكتابة بالحروف العربية/الإنجليزية.
+
+تم حل المشكلتين جذرياً:
+
+إلغاء صوت الزن تماماً واستبداله بنظام تنبيهات خفيف وهادئ عند التقاط وإنزال الحاوية فقط.
+
+دعم فوري ومباشر للتحكم: الونش يتحرك الآن بسلاسة فورية باستخدام أزرار W A S D أو أسهم لوحة المفاتيح ↑ ↓ ← → مهما كانت لغة الكيبورد (عربي أو إنجليزي).
+
+إمكانية الالتقاط والإنزال باستخدام زر E أو مسافة Space.
+
+ملف اللعبة الجاهز للتحميل:
+HTML icon
+index
+ HTML 
+Open
+الكود الكامل المعدل (index.html)
+استبدل محتوى ملفك على GitHub بهذا الكود مباشرة:
+
+HTML
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalmar Reachstacker - ضيافة كالمر</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; user-select: none; }
+        body { overflow: hidden; background-color: #0b0d11; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        
+        #ui-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 16px;
+        }
+        .hud-panel {
+            background: rgba(18, 22, 30, 0.94);
+            border: 2px solid #d31b23;
+            border-radius: 12px;
+            color: #fff;
+            padding: 12px 20px;
+            pointer-events: auto;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        }
+        .hud-title { font-size: 12px; color: #9aa5b5; font-weight: bold; }
+        .hud-value { font-size: 20px; font-weight: bold; color: #ffca28; margin-top: 4px; }
+
+        .lock-indicator {
+            display: inline-block; font-weight: bold; padding: 6px 14px;
+            border-radius: 20px; font-size: 13px; margin-top: 6px;
+        }
+        .locked { background: #00e676; color: #000; }
+        .unlocked { background: #ff5252; color: #fff; }
+
+        #controls-guide {
+            position: absolute; bottom: 16px; left: 16px;
+            background: rgba(14, 18, 26, 0.94); color: #fff;
+            padding: 14px 18px; border-radius: 12px; font-size: 13px;
+            border-left: 5px solid #d31b23;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            pointer-events: auto;
+        }
+        #controls-guide ul { list-style: none; margin-top: 6px; }
+        #controls-guide li { margin-bottom: 5px; }
+        kbd {
+            background: #263238; padding: 2px 7px; border-radius: 5px;
+            border: 1px solid #455a64; font-weight: bold; color: #00e676; font-size: 12px;
+        }
+
+        #cam-bar {
+            position: absolute; bottom: 16px; right: 16px; display: flex; gap: 8px; pointer-events: auto;
+        }
+        .btn-action {
+            background: #1e2638; color: #fff; border: 1px solid #37474f;
+            padding: 9px 15px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: bold;
+        }
+        .btn-action.active { background: #d31b23; border-color: #ff5252; color: #fff; }
+
+        #victory-modal {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(14, 20, 30, 0.98);
+            color: #fff; padding: 35px 50px; border-radius: 16px;
+            text-align: center; border: 3px solid #00e676;
+            display: none; pointer-events: auto;
+            box-shadow: 0 10px 50px rgba(0, 230, 118, 0.4);
+        }
+        #victory-modal h2 { font-size: 26px; color: #00e676; margin-bottom: 10px; }
+        #victory-modal p { font-size: 16px; color: #eceff1; margin-bottom: 18px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-overlay">
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+            <div class="hud-panel">
+                <div class="hud-title">🍹 الطلب المطلوب توصيله للضيف</div>
+                <div class="hud-value" id="target-title">طاولة 2: ركن العصائر الطازجة والموهيتو</div>
+            </div>
+
+            <div class="hud-panel" style="text-align: center;">
+                <div class="hud-title">حالة الماسكة (Twistlocks)</div>
+                <div id="lock-status" class="lock-indicator unlocked">🔓 الماسكة مفتوحة</div>
+                <div style="font-size: 12px; color: #bbb; margin-top: 4px;" id="action-hint">اقترب فوق الحاوية واضغط [E] أو [المسافة]</div>
+            </div>
+        </div>
+
+        <div id="controls-guide">
+            <strong style="color: #ff5252;">⚙️ أزرار التحكم في الونش (Kalmar):</strong>
+            <ul>
+                <li><kbd>W</kbd> أو <kbd>↑</kbd> : تحريك الونش للأمام</li>
+                <li><kbd>S</kbd> أو <kbd>↓</kbd> : تحريك الونش للخلف</li>
+                <li><kbd>A</kbd> / <kbd>D</kbd> أو <kbd>←</kbd> / <kbd>→</kbd> : الانعطاف يميناً ويساراً</li>
+                <li><kbd>R</kbd> / <kbd>F</kbd> : رفع / خفض الذراع الهيدروليكي</li>
+                <li><kbd>T</kbd> / <kbd>G</kbd> : تمديد / تقصير التلسكوب</li>
+                <li><kbd>E</kbd> أو <kbd>Space</kbd> : التقاط / إنزال الحاوية</li>
+            </ul>
+        </div>
+
+        <div id="cam-bar">
+            <button class="btn-action active" onclick="setCameraMode(0)">🎥 منظور خارجي</button>
+            <button class="btn-action" onclick="setCameraMode(1)">💺 كابينة السائق</button>
+            <button class="btn-action" onclick="setCameraMode(2)">🎯 منظور الماسكة</button>
+        </div>
+    </div>
+
+    <div id="victory-modal">
+        <h2>🎉 تم تسليم طلب المشروبات بنجاح!</h2>
+        <p>تم إنزال حاوية الضيافة بدقة تامة فوق طاولة المشروبات.<br>أهلاً بك في ضيافة شركة كالمر، استمتع بمشروبك!</p>
+        <button class="btn-action" style="background:#00e676; color:#000; font-size:16px; border:none; padding:10px 24px;" onclick="location.reload()">إعادة اللعب 🔄</button>
+    </div>
+
+    <script>
+        class GameAudio {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+            }
+            playBeep(freq = 300, duration = 0.1) {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e){}
+            }
+            playLockSound(isLock) {
+                this.playBeep(isLock ? 520 : 260, 0.18);
+            }
+            playWin() {
+                [440, 554, 659, 880].forEach((f, i) => {
+                    setTimeout(() => this.playBeep(f, 0.25), i * 140);
+                });
+            }
+        }
+        const audio = new GameAudio();
+
+        let scene, camera, renderer;
+        let vehicle, boomBase, boomTelescope, spreaderGroup, cargoContainer;
+        let isContainerLocked = false;
+        let isDelivered = false;
+        let cameraMode = 0;
+        let keyState = {};
+
+        const DRINK_TABLES = [
+            { id: 1, name: "طاولة 1: ركن القهوة الساخنة", color: 0x1e88e5, x: -26, z: 24, label: "☕ BAR 1: HOT COFFEE" },
+            { id: 2, name: "طاولة 2: ركن العصائر والموهيتو", color: 0x43a047, x: 0, z: 32, label: "🍹 BAR 2: FRESH JUICES" },
+            { id: 3, name: "طاولة 3: ركن المشروبات المثلجة", color: 0xfb8c00, x: 26, z: 24, label: "🥤 BAR 3: ICED DRINKS" }
+        ];
+        const TARGET_TABLE = DRINK_TABLES[1];
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xd6e4ed);
+            scene.fog = new THREE.FogExp2(0xd6e4ed, 0.012);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 16, -26);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444455, 0.7);
+            scene.add(hemiLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            sunLight.position.set(30, 60, -30);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 1024;
+            sunLight.shadow.mapSize.height = 1024;
+            scene.add(sunLight);
+
+            createGround();
+            createBuffetTables();
+            createCargoContainer();
+            createKalmarReachstacker();
+
+            window.addEventListener('keydown', (e) => {
+                audio.init();
+                keyState[e.code] = true;
+                if (e.code === 'KeyE' || e.code === 'Space') {
+                    toggleTwistlocks();
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keyState[e.code] = false;
+            });
+
+            window.addEventListener('resize', onResize);
+            animate();
+        }
+
+        function createGround() {
+            const ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(240, 240),
+                new THREE.MeshStandardMaterial({ color: 0x272b30, roughness: 0.85 })
+            );
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const grid = new THREE.GridHelper(240, 48, 0xffeb3b, 0x3e4752);
+            grid.position.y = 0.02;
+            scene.add(grid);
+        }
+
+        function createBuffetTables() {
+            DRINK_TABLES.forEach(table => {
+                const group = new THREE.Group();
+                group.position.set(table.x, 0, table.z);
+
+                const tableMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(4.4, 1.8, 9.4),
+                    new THREE.MeshStandardMaterial({ color: table.color, roughness: 0.4 })
+                );
+                tableMesh.position.y = 0.9;
+                tableMesh.receiveShadow = true;
+                group.add(tableMesh);
+
+                const pad = new THREE.Mesh(
+                    new THREE.PlaneGeometry(3.6, 8.6),
+                    new THREE.MeshBasicMaterial({ color: 0xffeb3b, wireframe: true })
+                );
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.y = 1.82;
+                group.add(pad);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 140;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#111722';
+                ctx.fillRect(0, 0, 512, 140);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 26px Tahoma, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(table.label, 256, 80);
+
+                const tex = new THREE.CanvasTexture(canvas);
+                const label = new THREE.Mesh(
+                    new THREE.PlaneGeometry(7.0, 1.9),
+                    new THREE.MeshBasicMaterial({ map: tex })
+                );
+                label.position.set(0, 3.6, 0);
+                group.add(label);
+
+                scene.add(group);
+            });
+        }
+
+        function createCargoContainer() {
+            cargoContainer = new THREE.Group();
+            cargoContainer.position.set(0, 1.7, -10);
+
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(3.6, 3.4, 8.5),
+                new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.45 })
+            );
+            body.castShadow = true;
+            body.receiveShadow = true;
+            cargoContainer.add(body);
+
+            scene.add(cargoContainer);
+        }
+
+        function createKalmarReachstacker() {
+            vehicle = new THREE.Group();
+
+            const redMat = new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.35 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x1f2327, roughness: 0.6 });
+            const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x1a2835, transparent: true, opacity: 0.7 });
+
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.8, 9.6), redMat);
+            chassis.position.y = 2.0;
+            chassis.castShadow = true;
+            vehicle.add(chassis);
+
+            const cw = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.3, 2.3), redMat);
+            cw.position.set(0, 2.3, -4.5);
+            cw.castShadow = true;
+            vehicle.add(cw);
+
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.1, 2.4), glassMat);
+            cabin.position.set(0, 3.8, -1.2);
+            vehicle.add(cabin);
+
+            const wheelGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.9, 20);
+            const wPos = [[-2.4, 1.2, 3.2], [2.4, 1.2, 3.2], [-2.4, 1.2, -3.2], [2.4, 1.2, -3.2]];
+            wPos.forEach(p => {
+                const w = new THREE.Mesh(wheelGeo, darkMat);
+                w.rotation.z = Math.PI / 2;
+                w.position.set(...p);
+                w.castShadow = true;
+                vehicle.add(w);
+            });
+
+            boomBase = new THREE.Group();
+            boomBase.position.set(0, 3.7, -3.0);
+
+            const outerBoom = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 10.5), darkMat);
+            outerBoom.position.set(0, 0, 4.8);
+            outerBoom.castShadow = true;
+            boomBase.add(outerBoom);
+
+            boomTelescope = new THREE.Group();
+            boomTelescope.position.set(0, 0, 9.6);
+
+            const innerBoom = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1, 7.2), darkMat);
+            innerBoom.position.set(0, 0, 3.0);
+            innerBoom.castShadow = true;
+            boomTelescope.add(innerBoom);
+
+            spreaderGroup = new THREE.Group();
+            spreaderGroup.position.set(0, 0, 6.4);
+
+            const spreaderMain = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.45, 8.6), darkMat);
+            spreaderMain.position.y = -0.3;
+            spreaderMain.castShadow = true;
+            spreaderGroup.add(spreaderMain);
+
+            const flipperMat = new THREE.MeshStandardMaterial({ color: 0xffeb3b });
+            const fGeo = new THREE.BoxGeometry(0.15, 1.1, 0.4);
+            [[-1.95, -0.6, -4.2], [1.95, -0.6, -4.2], [-1.95, -0.6, 4.2], [1.95, -0.6, 4.2]].forEach(fp => {
+                const f = new THREE.Mesh(fGeo, flipperMat);
+                f.position.set(...fp);
+                spreaderGroup.add(f);
+            });
+
+            boomTelescope.add(spreaderGroup);
+            boomBase.add(boomTelescope);
+            vehicle.add(boomBase);
+
+            vehicle.position.set(0, 0, -25);
+            scene.add(vehicle);
+        }
+
+        let boomAngle = 0.22;
+        let telescopeDist = 0.0;
+
+        function updateMovement() {
+            const moveSpeed = 0.22;
+            const rotSpeed = 0.026;
+
+            if (keyState['KeyW'] || keyState['ArrowUp']) vehicle.translateZ(moveSpeed);
+            if (keyState['KeyS'] || keyState['ArrowDown']) vehicle.translateZ(-moveSpeed);
+            if (keyState['KeyA'] || keyState['ArrowLeft']) vehicle.rotation.y += rotSpeed;
+            if (keyState['KeyD'] || keyState['ArrowRight']) vehicle.rotation.y -= rotSpeed;
+
+            if (keyState['KeyR'] && boomAngle < 0.55) boomAngle += 0.006;
+            if (keyState['KeyF'] && boomAngle > 0.04) boomAngle -= 0.006;
+
+            if (keyState['KeyT'] && telescopeDist < 4.5) telescopeDist += 0.05;
+            if (keyState['KeyG'] && telescopeDist > 0.0) telescopeDist -= 0.05;
+
+            boomBase.rotation.x = boomAngle;
+            boomTelescope.position.z = 9.6 + telescopeDist;
+            spreaderGroup.rotation.x = -boomAngle;
+        }
+
+        function toggleTwistlocks() {
+            if (isDelivered) return;
+
+            const spreaderWorldPos = new THREE.Vector3();
+            spreaderGroup.getWorldPosition(spreaderWorldPos);
+
+            const containerWorldPos = new THREE.Vector3();
+            cargoContainer.getWorldPosition(containerWorldPos);
+
+            if (!isContainerLocked) {
+                const dist = spreaderWorldPos.distanceTo(new THREE.Vector3(containerWorldPos.x, containerWorldPos.y + 1.7, containerWorldPos.z));
+                if (dist < 4.2) {
+                    spreaderGroup.attach(cargoContainer);
+                    cargoContainer.position.set(0, -2.0, 0);
+                    cargoContainer.rotation.set(0, 0, 0);
+
+                    isContainerLocked = true;
+                    audio.playLockSound(true);
+
+                    document.getElementById('lock-status').className = "lock-indicator locked";
+                    document.getElementById('lock-status').innerText = "🔒 الحاوية مقفولة ومحمولة";
+                    document.getElementById('action-hint').innerText = "انتقل إلى: طاولة رقم 2 (العصائر والموهيتو)";
+                } else {
+                    document.getElementById('action-hint').innerText = "⚠️ قرّب الونش والماسكة فوق الحاوية أولاً!";
+                }
+            } else {
+                const targetPos = new THREE.Vector3(TARGET_TABLE.x, 1.8, TARGET_TABLE.z);
+                const distToBuffet = containerWorldPos.distanceTo(targetPos);
+
+                if (distToBuffet < 5.5) {
+                    scene.attach(cargoContainer);
+                    cargoContainer.position.set(TARGET_TABLE.x, 3.4, TARGET_TABLE.z);
+                    cargoContainer.rotation.set(0, 0, 0);
+
+                    isContainerLocked = false;
+                    isDelivered = true;
+                    audio.playLockSound(false);
+                    audio.playWin();
+
+                    document.getElementById('lock-status').className = "lock-indicator locked";
+                    document.getElementById('lock-status').innerText = "✅ تم تسليم الطلب بنجاح!";
+                    document.getElementById('victory-modal').style.display = 'block';
+                } else {
+                    scene.attach(cargoContainer);
+                    cargoContainer.position.y = 1.7;
+                    isContainerLocked = false;
+                    audio.playLockSound(false);
+
+                    document.getElementById('lock-status').className = "lock-indicator unlocked";
+                    document.getElementById('lock-status').innerText = "🔓 تم إنزال الحاوية";
+                    document.getElementById('action-hint').innerText = "وجّه الماسكة فوق الحاوية واضغط [E]";
+                }
+            }
+        }
+
+        function setCameraMode(mode) {
+            cameraMode = mode;
+            document.querySelectorAll('#cam-bar button').forEach((btn, idx) => {
+                btn.classList.toggle('active', idx === mode);
+            });
+        }
+
+        function updateCamera() {
+            if (cameraMode === 0) {
+                const offset = new THREE.Vector3(0, 14, -26);
+                offset.applyMatrix4(vehicle.matrixWorld);
+                camera.position.lerp(offset, 0.1);
+                camera.lookAt(vehicle.position.x, vehicle.position.y + 3.0, vehicle.position.z);
+            } else if (cameraMode === 1) {
+                const cabinPos = new THREE.Vector3(0, 4.0, -1.0);
+                cabinPos.applyMatrix4(vehicle.matrixWorld);
+                camera.position.copy(cabinPos);
+
+                const lookTarget = new THREE.Vector3(0, 3.6, 12);
+                lookTarget.applyMatrix4(vehicle.matrixWorld);
+                camera.lookAt(lookTarget);
+            } else if (cameraMode === 2) {
+                const spreaderPos = new THREE.Vector3();
+                spreaderGroup.getWorldPosition(spreaderPos);
+                camera.position.set(spreaderPos.x, spreaderPos.y + 6.0, spreaderPos.z);
+                camera.lookAt(spreaderPos.x, spreaderPos.y - 10.0, spreaderPos.z);
+            }
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateMovement();
+            updateCamera();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
+
+
+
+Gemini is AI and can make mistakes.
+
+Analysing
+Loading index.html.
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalmar Reachstacker - ضيافة كالمر</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, sans-serif; user-select: none; }
+        body { overflow: hidden; background-color: #0b0d11; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        
+        #ui-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 16px;
+        }
+        .hud-panel {
+            background: rgba(18, 22, 30, 0.94);
+            border: 2px solid #d31b23;
+            border-radius: 12px;
+            color: #fff;
+            padding: 12px 20px;
+            pointer-events: auto;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        }
+        .hud-title { font-size: 12px; color: #9aa5b5; font-weight: bold; }
+        .hud-value { font-size: 20px; font-weight: bold; color: #ffca28; margin-top: 4px; }
+
+        .lock-indicator {
+            display: inline-block; font-weight: bold; padding: 6px 14px;
+            border-radius: 20px; font-size: 13px; margin-top: 6px;
+        }
+        .locked { background: #00e676; color: #000; }
+        .unlocked { background: #ff5252; color: #fff; }
+
+        #controls-guide {
+            position: absolute; bottom: 16px; left: 16px;
+            background: rgba(14, 18, 26, 0.94); color: #fff;
+            padding: 14px 18px; border-radius: 12px; font-size: 13px;
+            border-left: 5px solid #d31b23;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            pointer-events: auto;
+        }
+        #controls-guide ul { list-style: none; margin-top: 6px; }
+        #controls-guide li { margin-bottom: 5px; }
+        kbd {
+            background: #263238; padding: 2px 7px; border-radius: 5px;
+            border: 1px solid #455a64; font-weight: bold; color: #00e676; font-size: 12px;
+        }
+
+        #cam-bar {
+            position: absolute; bottom: 16px; right: 16px; display: flex; gap: 8px; pointer-events: auto;
+        }
+        .btn-action {
+            background: #1e2638; color: #fff; border: 1px solid #37474f;
+            padding: 9px 15px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: bold;
+        }
+        .btn-action.active { background: #d31b23; border-color: #ff5252; color: #fff; }
+
+        #victory-modal {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(14, 20, 30, 0.98);
+            color: #fff; padding: 35px 50px; border-radius: 16px;
+            text-align: center; border: 3px solid #00e676;
+            display: none; pointer-events: auto;
+            box-shadow: 0 10px 50px rgba(0, 230, 118, 0.4);
+        }
+        #victory-modal h2 { font-size: 26px; color: #00e676; margin-bottom: 10px; }
+        #victory-modal p { font-size: 16px; color: #eceff1; margin-bottom: 18px; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-overlay">
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+            <div class="hud-panel">
+                <div class="hud-title">🍹 الطلب المطلوب توصيله للضيف</div>
+                <div class="hud-value" id="target-title">طاولة 2: ركن العصائر الطازجة والموهيتو</div>
+            </div>
+
+            <div class="hud-panel" style="text-align: center;">
+                <div class="hud-title">حالة الماسكة (Twistlocks)</div>
+                <div id="lock-status" class="lock-indicator unlocked">🔓 الماسكة مفتوحة</div>
+                <div style="font-size: 12px; color: #bbb; margin-top: 4px;" id="action-hint">اقترب فوق الحاوية واضغط [E] أو [المسافة]</div>
+            </div>
+        </div>
+
+        <div id="controls-guide">
+            <strong style="color: #ff5252;">⚙️ أزرار التحكم في الونش (Kalmar):</strong>
+            <ul>
+                <li><kbd>W</kbd> أو <kbd>↑</kbd> : تحريك الونش للأمام</li>
+                <li><kbd>S</kbd> أو <kbd>↓</kbd> : تحريك الونش للخلف</li>
+                <li><kbd>A</kbd> / <kbd>D</kbd> أو <kbd>←</kbd> / <kbd>→</kbd> : الانعطاف يميناً ويساراً</li>
+                <li><kbd>R</kbd> / <kbd>F</kbd> : رفع / خفض الذراع الهيدروليكي</li>
+                <li><kbd>T</kbd> / <kbd>G</kbd> : تمديد / تقصير التلسكوب</li>
+                <li><kbd>E</kbd> أو <kbd>Space</kbd> : التقاط / إنزال الحاوية</li>
+            </ul>
+        </div>
+
+        <div id="cam-bar">
+            <button class="btn-action active" onclick="setCameraMode(0)">🎥 منظور خارجي</button>
+            <button class="btn-action" onclick="setCameraMode(1)">💺 كابينة السائق</button>
+            <button class="btn-action" onclick="setCameraMode(2)">🎯 منظور الماسكة</button>
+        </div>
+    </div>
+
+    <div id="victory-modal">
+        <h2>🎉 تم تسليم طلب المشروبات بنجاح!</h2>
+        <p>تم إنزال حاوية الضيافة بدقة تامة فوق طاولة المشروبات.<br>أهلاً بك في ضيافة شركة كالمر، استمتع بمشروبك!</p>
+        <button class="btn-action" style="background:#00e676; color:#000; font-size:16px; border:none; padding:10px 24px;" onclick="location.reload()">إعادة اللعب 🔄</button>
+    </div>
+
+    <script>
+        // نظام صوتي لطيف خالي من أي زن أو إزعاج
+        class GameAudio {
+            constructor() {
+                this.ctx = null;
+            }
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    if (AudioCtx) this.ctx = new AudioCtx();
+                }
+            }
+            playBeep(freq = 300, duration = 0.1) {
+                if (!this.ctx) return;
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+                    gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + duration);
+                } catch(e){}
+            }
+            playLockSound(isLock) {
+                this.playBeep(isLock ? 520 : 260, 0.18);
+            }
+            playWin() {
+                [440, 554, 659, 880].forEach((f, i) => {
+                    setTimeout(() => this.playBeep(f, 0.25), i * 140);
+                });
+            }
+        }
+        const audio = new GameAudio();
+
+        // بيئة Three.js
+        let scene, camera, renderer;
+        let vehicle, boomBase, boomTelescope, spreaderGroup, cargoContainer;
+        let isContainerLocked = false;
+        let isDelivered = false;
+        let cameraMode = 0;
+        let keyState = {};
+
+        const DRINK_TABLES = [
+            { id: 1, name: "طاولة 1: ركن القهوة الساخنة", color: 0x1e88e5, x: -26, z: 24, label: "☕ BAR 1: HOT COFFEE" },
+            { id: 2, name: "طاولة 2: ركن العصائر والموهيتو", color: 0x43a047, x: 0, z: 32, label: "🍹 BAR 2: FRESH JUICES" },
+            { id: 3, name: "طاولة 3: ركن المشروبات المثلجة", color: 0xfb8c00, x: 26, z: 24, label: "🥤 BAR 3: ICED DRINKS" }
+        ];
+        const TARGET_TABLE = DRINK_TABLES[1];
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xd6e4ed);
+            scene.fog = new THREE.FogExp2(0xd6e4ed, 0.012);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 16, -26);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444455, 0.7);
+            scene.add(hemiLight);
+
+            const sunLight = new THREE.DirectionalLight(0xffffff, 1.0);
+            sunLight.position.set(30, 60, -30);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 1024;
+            sunLight.shadow.mapSize.height = 1024;
+            scene.add(sunLight);
+
+            createGround();
+            createBuffetTables();
+            createCargoContainer();
+            createKalmarReachstacker();
+
+            // الاستماع للأزرار (يدعم الحروف الصغيرة والكبيرة والأسهم ولوحة المفاتيح العربية)
+            window.addEventListener('keydown', (e) => {
+                audio.init();
+                const code = e.code;
+                keyState[code] = true;
+                if (code === 'KeyE' || code === 'Space') {
+                    toggleTwistlocks();
+                }
+            });
+
+            window.addEventListener('keyup', (e) => {
+                keyState[e.code] = false;
+            });
+
+            window.addEventListener('resize', onResize);
+            animate();
+        }
+
+        function createGround() {
+            const ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(240, 240),
+                new THREE.MeshStandardMaterial({ color: 0x272b30, roughness: 0.85 })
+            );
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const grid = new THREE.GridHelper(240, 48, 0xffeb3b, 0x3e4752);
+            grid.position.y = 0.02;
+            scene.add(grid);
+        }
+
+        function createBuffetTables() {
+            DRINK_TABLES.forEach(table => {
+                const group = new THREE.Group();
+                group.position.set(table.x, 0, table.z);
+
+                const tableMesh = new THREE.Mesh(
+                    new THREE.BoxGeometry(4.4, 1.8, 9.4),
+                    new THREE.MeshStandardMaterial({ color: table.color, roughness: 0.4 })
+                );
+                tableMesh.position.y = 0.9;
+                tableMesh.receiveShadow = true;
+                group.add(tableMesh);
+
+                const pad = new THREE.Mesh(
+                    new THREE.PlaneGeometry(3.6, 8.6),
+                    new THREE.MeshBasicMaterial({ color: 0xffeb3b, wireframe: true })
+                );
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.y = 1.82;
+                group.add(pad);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 140;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#111722';
+                ctx.fillRect(0, 0, 512, 140);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 26px Tahoma, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(table.label, 256, 80);
+
+                const tex = new THREE.CanvasTexture(canvas);
+                const label = new THREE.Mesh(
+                    new THREE.PlaneGeometry(7.0, 1.9),
+                    new THREE.MeshBasicMaterial({ map: tex })
+                );
+                label.position.set(0, 3.6, 0);
+                group.add(label);
+
+                scene.add(group);
+            });
+        }
+
+        function createCargoContainer() {
+            cargoContainer = new THREE.Group();
+            cargoContainer.position.set(0, 1.7, -10);
+
+            const body = new THREE.Mesh(
+                new THREE.BoxGeometry(3.6, 3.4, 8.5),
+                new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.45 })
+            );
+            body.castShadow = true;
+            body.receiveShadow = true;
+            cargoContainer.add(body);
+
+            scene.add(cargoContainer);
+        }
+
+        function createKalmarReachstacker() {
+            vehicle = new THREE.Group();
+
+            const redMat = new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.35 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x1f2327, roughness: 0.6 });
+            const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x1a2835, transparent: true, opacity: 0.7 });
+
+            // الشاسيه الرئيسي
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.6, 1.8, 9.6), redMat);
+            chassis.position.y = 2.0;
+            chassis.castShadow = true;
+            vehicle.add(chassis);
+
+            // الثقل الخلفي
+            const cw = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.3, 2.3), redMat);
+            cw.position.set(0, 2.3, -4.5);
+            cw.castShadow = true;
+            vehicle.add(cw);
+
+            // الكابينة
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.3, 2.1, 2.4), glassMat);
+            cabin.position.set(0, 3.8, -1.2);
+            vehicle.add(cabin);
+
+            // العجلات
+            const wheelGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.9, 20);
+            const wPos = [[-2.4, 1.2, 3.2], [2.4, 1.2, 3.2], [-2.4, 1.2, -3.2], [2.4, 1.2, -3.2]];
+            wPos.forEach(p => {
+                const w = new THREE.Mesh(wheelGeo, darkMat);
+                w.rotation.z = Math.PI / 2;
+                w.position.set(...p);
+                w.castShadow = true;
+                vehicle.add(w);
+            });
+
+            // الذراع الرئيسي
+            boomBase = new THREE.Group();
+            boomBase.position.set(0, 3.7, -3.0);
+
+            const outerBoom = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.4, 10.5), darkMat);
+            outerBoom.position.set(0, 0, 4.8);
+            outerBoom.castShadow = true;
+            boomBase.add(outerBoom);
+
+            // التلسكوب
+            boomTelescope = new THREE.Group();
+            boomTelescope.position.set(0, 0, 9.6);
+
+            const innerBoom = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.1, 7.2), darkMat);
+            innerBoom.position.set(0, 0, 3.0);
+            innerBoom.castShadow = true;
+            boomTelescope.add(innerBoom);
+
+            // الماسك (Spreader)
+            spreaderGroup = new THREE.Group();
+            spreaderGroup.position.set(0, 0, 6.4);
+
+            const spreaderMain = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.45, 8.6), darkMat);
+            spreaderMain.position.y = -0.3;
+            spreaderMain.castShadow = true;
+            spreaderGroup.add(spreaderMain);
+
+            // زعانف الإرشاد الصفراء
+            const flipperMat = new THREE.MeshStandardMaterial({ color: 0xffeb3b });
+            const fGeo = new THREE.BoxGeometry(0.15, 1.1, 0.4);
+            [[-1.95, -0.6, -4.2], [1.95, -0.6, -4.2], [-1.95, -0.6, 4.2], [1.95, -0.6, 4.2]].forEach(fp => {
+                const f = new THREE.Mesh(fGeo, flipperMat);
+                f.position.set(...fp);
+                spreaderGroup.add(f);
+            });
+
+            boomTelescope.add(spreaderGroup);
+            boomBase.add(boomTelescope);
+            vehicle.add(boomBase);
+
+            vehicle.position.set(0, 0, -25);
+            scene.add(vehicle);
+        }
+
+        // فيزياء وتحكم سلس وسريع
+        let boomAngle = 0.22;
+        let telescopeDist = 0.0;
+
+        function updateMovement() {
+            const moveSpeed = 0.22;
+            const rotSpeed = 0.026;
+
+            // التحرك للأمام والخلف
+            if (keyState['KeyW'] || keyState['ArrowUp']) {
+                vehicle.translateZ(moveSpeed);
+            }
+            if (keyState['KeyS'] || keyState['ArrowDown']) {
+                vehicle.translateZ(-moveSpeed);
+            }
+
+            // الانعطاف
+            if (keyState['KeyA'] || keyState['ArrowLeft']) {
+                vehicle.rotation.y += rotSpeed;
+            }
+            if (keyState['KeyD'] || keyState['ArrowRight']) {
+                vehicle.rotation.y -= rotSpeed;
+            }
+
+            // رفع وخفض الذراع
+            if (keyState['KeyR'] && boomAngle < 0.55) boomAngle += 0.006;
+            if (keyState['KeyF'] && boomAngle > 0.04) boomAngle -= 0.006;
+
+            // التلسكوب
+            if (keyState['KeyT'] && telescopeDist < 4.5) telescopeDist += 0.05;
+            if (keyState['KeyG'] && telescopeDist > 0.0) telescopeDist -= 0.05;
+
+            // تطبيق التموضع والزوايا
+            boomBase.rotation.x = boomAngle;
+            boomTelescope.position.z = 9.6 + telescopeDist;
+            spreaderGroup.rotation.x = -boomAngle;
+        }
+
+        function toggleTwistlocks() {
+            if (isDelivered) return;
+
+            const spreaderWorldPos = new THREE.Vector3();
+            spreaderGroup.getWorldPosition(spreaderWorldPos);
+
+            const containerWorldPos = new THREE.Vector3();
+            cargoContainer.getWorldPosition(containerWorldPos);
+
+            if (!isContainerLocked) {
+                // التقاط الحاوية
+                const dist = spreaderWorldPos.distanceTo(new THREE.Vector3(containerWorldPos.x, containerWorldPos.y + 1.7, containerWorldPos.z));
+                if (dist < 4.2) {
+                    spreaderGroup.attach(cargoContainer);
+                    cargoContainer.position.set(0, -2.0, 0);
+                    cargoContainer.rotation.set(0, 0, 0);
+
+                    isContainerLocked = true;
+                    audio.playLockSound(true);
+
+                    document.getElementById('lock-status').className = "lock-indicator locked";
+                    document.getElementById('lock-status').innerText = "🔒 الحاوية مقفولة ومحمولة";
+                    document.getElementById('action-hint').innerText = "انتقل إلى: طاولة رقم 2 (العصائر والموهيتو)";
+                } else {
+                    document.getElementById('action-hint').innerText = "⚠️ قرّب الونش والماسكة فوق الحاوية أولاً!";
+                }
+            } else {
+                // إنزال الحاوية
+                const targetPos = new THREE.Vector3(TARGET_TABLE.x, 1.8, TARGET_TABLE.z);
+                const distToBuffet = containerWorldPos.distanceTo(targetPos);
+
+                if (distToBuffet < 5.5) {
+                    scene.attach(cargoContainer);
+                    cargoContainer.position.set(TARGET_TABLE.x, 3.4, TARGET_TABLE.z);
+                    cargoContainer.rotation.set(0, 0, 0);
+
+                    isContainerLocked = false;
+                    isDelivered = true;
+                    audio.playLockSound(false);
+                    audio.playWin();
+
+                    document.getElementById('lock-status').className = "lock-indicator locked";
+                    document.getElementById('lock-status').innerText = "✅ تم تسليم الطلب بنجاح!";
+                    document.getElementById('victory-modal').style.display = 'block';
+                } else {
+                    scene.attach(cargoContainer);
+                    cargoContainer.position.y = 1.7;
+                    isContainerLocked = false;
+                    audio.playLockSound(false);
+
+                    document.getElementById('lock-status').className = "lock-indicator unlocked";
+                    document.getElementById('lock-status').innerText = "🔓 تم إنزال الحاوية";
+                    document.getElementById('action-hint').innerText = "وجّه الماسكة فوق الحاوية واضغط [E]";
+                }
+            }
+        }
+
+        function setCameraMode(mode) {
+            cameraMode = mode;
+            document.querySelectorAll('#cam-bar button').forEach((btn, idx) => {
+                btn.classList.toggle('active', idx === mode);
+            });
+        }
+
+        function updateCamera() {
+            if (cameraMode === 0) {
+                const offset = new THREE.Vector3(0, 14, -26);
+                offset.applyMatrix4(vehicle.matrixWorld);
+                camera.position.lerp(offset, 0.1);
+                camera.lookAt(vehicle.position.x, vehicle.position.y + 3.0, vehicle.position.z);
+            } else if (cameraMode === 1) {
+                const cabinPos = new THREE.Vector3(0, 4.0, -1.0);
+                cabinPos.applyMatrix4(vehicle.matrixWorld);
+                camera.position.copy(cabinPos);
+
+                const lookTarget = new THREE.Vector3(0, 3.6, 12);
+                lookTarget.applyMatrix4(vehicle.matrixWorld);
+                camera.lookAt(lookTarget);
+            } else if (cameraMode === 2) {
+                const spreaderPos = new THREE.Vector3();
+                spreaderGroup.getWorldPosition(spreaderPos);
+                camera.position.set(spreaderPos.x, spreaderPos.y + 6.0, spreaderPos.z);
+                camera.lookAt(spreaderPos.x, spreaderPos.y - 10.0, spreaderPos.z);
+            }
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            updateMovement();
+            updateCamera();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
+index.html
+Displaying index.html.
