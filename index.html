@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kalmar Reachstacker - Buffet Challenge</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; user-select: none; }
+        body { overflow: hidden; background-color: #111; color: #fff; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; }
+        
+        /* شاشات الواجهة والتحكم */
+        #ui-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            pointer-events: none; display: flex; flex-direction: column;
+            justify-content: space-between; padding: 20px;
+        }
+        .hud-card {
+            background: rgba(20, 22, 28, 0.88);
+            border: 2px solid #e31b23; /* لون كالمر الأحمر الشهير */
+            border-radius: 12px;
+            color: #fff;
+            padding: 16px 24px;
+            pointer-events: auto;
+            backdrop-filter: blur(8px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+        }
+        .hud-title { font-size: 13px; color: #aaa; text-transform: uppercase; letter-spacing: 1px; }
+        .hud-value { font-size: 22px; font-weight: bold; color: #ffeb3b; margin-top: 4px; }
+
+        /* دليل التحكم */
+        #controls-guide {
+            position: absolute; bottom: 20px; left: 20px;
+            background: rgba(15, 17, 23, 0.9); color: #fff;
+            padding: 16px 20px; border-radius: 10px; font-size: 13px;
+            border-left: 5px solid #e31b23;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+        #controls-guide ul { list-style: none; margin-top: 8px; }
+        #controls-guide li { margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+        kbd {
+            background: #2a2d36; padding: 3px 8px; border-radius: 5px;
+            border: 1px solid #444; font-weight: bold; color: #00e676;
+            box-shadow: 0 2px 0 #111;
+        }
+
+        /* رسالة التنبيه والانتصار */
+        #message-box {
+            position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(15, 20, 25, 0.96);
+            color: #fff; padding: 35px 50px; border-radius: 16px;
+            text-align: center; border: 3px solid #00e676;
+            display: none; pointer-events: auto;
+            box-shadow: 0 10px 40px rgba(0, 230, 118, 0.3);
+            animation: popIn 0.4s ease-out;
+        }
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        #message-box h2 { font-size: 30px; margin-bottom: 12px; color: #00e676; }
+        #message-box p { font-size: 17px; color: #ddd; line-height: 1.6; }
+        #message-box button {
+            margin-top: 24px; padding: 12px 30px;
+            background: #e31b23; border: none; color: #fff;
+            font-size: 17px; font-weight: bold; cursor: pointer; border-radius: 8px;
+            transition: 0.2s;
+        }
+        #message-box button:hover { background: #b8141b; transform: scale(1.05); }
+
+        #cam-indicator {
+            position: absolute; top: 20px; right: 20px;
+            background: rgba(0,0,0,0.6); padding: 8px 16px; border-radius: 20px;
+            font-size: 13px; color: #bbb; border: 1px solid #444;
+        }
+    </style>
+    <!-- مكتبة Three.js ثلاثية الأبعاد -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+
+    <div id="ui-overlay">
+        <!-- شريط المعلومات العلوي -->
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+            <div class="hud-card">
+                <div class="hud-title">الطلب المطلوب توصيله (Target Buffet Order)</div>
+                <div class="hud-value" id="target-station">طاولة رقم 2: بوفيه المشويات والأطباق الساخنة</div>
+            </div>
+            <div class="hud-card" style="text-align: center;">
+                <div class="hud-title">حالة حاوية البوفيه (Kalmar Cargo)</div>
+                <div class="hud-value" id="status-text" style="color: #ff9800;">محمولة بالرافعة - توجّه للهدف</div>
+            </div>
+        </div>
+
+        <div id="cam-indicator">اضغط <b>V</b> لتغيير الكاميرا (كابينة السائق / منظور خارجي)</div>
+
+        <!-- دليل الأزرار -->
+        <div id="controls-guide">
+            <strong>🎮 تحكم بمعدة Kalmar Reachstacker:</strong>
+            <ul>
+                <li><kbd>W</kbd> / <kbd>S</kbd> : تحريك المعدة للأمام / الخلف</li>
+                <li><kbd>A</kbd> / <kbd>D</kbd> : توجيه وانعطاف العجلات</li>
+                <li><kbd>R</kbd> / <kbd>F</kbd> : رفع / خفض الذراع الهيدروليكي (Boom)</li>
+                <li><kbd>Space</kbd> : إنزال وتسليم الحاوية على الطاولة</li>
+                <li><kbd>V</kbd> : تبديل الكاميرا (منظور السائق)</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- نافذة الفوز وتسليم الأوردر -->
+    <div id="message-box">
+        <h2>🎉 تم تسليم طلب البوفيه بنجاح!</h2>
+        <p>أداء احترافي رائع بقيادة رافعة <b>Kalmar Gloria Reachstacker</b>.<br>أهلاً بك في ضيافة شركة كالمر، استمتع بوجبتك!</p>
+        <button onclick="resetGame()">إعادة التحدي 🔄</button>
+    </div>
+
+    <script>
+        let scene, camera, renderer, vehicle, boom, spreader, containerBox;
+        let keys = {};
+        let isDriverView = false;
+        let containerDelivered = false;
+
+        const STATIONS = [
+            { id: 1, name: "طاولة 1: ركن المشروبات والقهوة", x: -30, z: 25, color: 0x2196f3 },
+            { id: 2, name: "طاولة 2: بوفيه المشويات الساخنة", x: 0, z: 35, color: 0x00e676 },
+            { id: 3, name: "طاولة 3: ركن الحلويات والفاكهة", x: 30, z: 25, color: 0xff9800 }
+        ];
+        const TARGET_STATION = STATIONS[1];
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xdde8f0);
+            scene.fog = new THREE.FogExp2(0xdde8f0, 0.012);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 15, -28);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // الإضاءة
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444455, 0.6);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+            dirLight.position.set(40, 80, -40);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            createEnvironment();
+            createBuffetStations();
+            buildReachStacker();
+
+            window.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+            window.addEventListener('keyup', (e) => {
+                keys[e.key.toLowerCase()] = false;
+                if (e.key.toLowerCase() === 'v') isDriverView = !isDriverView;
+                if (e.code === 'Space') tryDeliverContainer();
+            });
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        function createEnvironment() {
+            const groundGeo = new THREE.PlaneGeometry(250, 250);
+            const groundMat = new THREE.MeshStandardMaterial({ color: 0x2d3138, roughness: 0.85 });
+            const ground = new THREE.Mesh(groundGeo, groundMat);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            const grid = new THREE.GridHelper(250, 50, 0xffd600, 0x444d56);
+            grid.position.y = 0.02;
+            scene.add(grid);
+
+            createBanner("معرض ضيافة وزوار كالمر | Kalmar Exhibition", 0, 12, -60, 0xd31b23);
+        }
+
+        function createBanner(text, x, y, z, bgColor) {
+            const canvas = document.createElement('canvas');
+            canvas.width = 1024; canvas.height = 256;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = '#' + bgColor.toString(16).padStart(6, '0');
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 44px Tahoma';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, 512, 145);
+
+            const texture = new THREE.CanvasTexture(canvas);
+            const banner = new THREE.Mesh(
+                new THREE.PlaneGeometry(36, 9),
+                new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })
+            );
+            banner.position.set(x, y, z);
+            scene.add(banner);
+        }
+
+        function createBuffetStations() {
+            STATIONS.forEach(station => {
+                const group = new THREE.Group();
+                group.position.set(station.x, 0, station.z);
+
+                const table = new THREE.Mesh(
+                    new THREE.BoxGeometry(10, 1.8, 5.5),
+                    new THREE.MeshStandardMaterial({ color: 0x1f242d, roughness: 0.5 })
+                );
+                table.position.y = 0.9;
+                table.receiveShadow = true;
+                group.add(table);
+
+                const pad = new THREE.Mesh(
+                    new THREE.PlaneGeometry(8.5, 4.2),
+                    new THREE.MeshBasicMaterial({ color: station.color })
+                );
+                pad.rotation.x = -Math.PI / 2;
+                pad.position.y = 1.81;
+                group.add(pad);
+
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 140;
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, 512, 140);
+                ctx.fillStyle = '#000000';
+                ctx.font = 'bold 28px Tahoma';
+                ctx.textAlign = 'center';
+                ctx.fillText(station.name, 256, 80);
+
+                const tex = new THREE.CanvasTexture(canvas);
+                const label = new THREE.Mesh(
+                    new THREE.PlaneGeometry(7, 1.9),
+                    new THREE.MeshBasicMaterial({ map: tex })
+                );
+                label.position.set(0, 3.6, 0);
+                group.add(label);
+
+                scene.add(group);
+            });
+        }
+
+        function buildReachStacker() {
+            vehicle = new THREE.Group();
+
+            const kalmarRed = new THREE.MeshStandardMaterial({ color: 0xd31b23, roughness: 0.3, metalness: 0.2 });
+            const darkMetal = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.6, metalness: 0.4 });
+            const glassMat = new THREE.MeshPhysicalMaterial({ color: 0x223344, transparent: true, opacity: 0.65, roughness: 0.1 });
+
+            // الشاسيه
+            const chassis = new THREE.Mesh(new THREE.BoxGeometry(4.6, 2.2, 9.5), kalmarRed);
+            chassis.position.y = 2.0;
+            chassis.castShadow = true;
+            vehicle.add(chassis);
+
+            // كابينة السائق
+            const cabin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 2.0, 2.4), glassMat);
+            cabin.position.set(0, 3.6, -1.2);
+            vehicle.add(cabin);
+
+            // العجلات
+            const wheelGeo = new THREE.CylinderGeometry(1.2, 1.2, 1.0, 24);
+            const wheelPos = [
+                [-2.4, 1.2, 3.2], [2.4, 1.2, 3.2],
+                [-2.4, 1.2, -3.2], [2.4, 1.2, -3.2]
+            ];
+            wheelPos.forEach(p => {
+                const w = new THREE.Mesh(wheelGeo, darkMetal);
+                w.rotation.z = Math.PI / 2;
+                w.position.set(...p);
+                w.castShadow = true;
+                vehicle.add(w);
+            });
+
+            // الذراع
+            boom = new THREE.Group();
+            boom.position.set(0, 3.6, -2.8);
+
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.3, 11), darkMetal);
+            arm.position.set(0, 0, 5.0);
+            arm.castShadow = true;
+            boom.add(arm);
+
+            // الممسك (Spreader)
+            spreader = new THREE.Group();
+            spreader.position.set(0, 0, 10.5);
+
+            const spreaderHead = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.5, 7.0), darkMetal);
+            spreader.add(spreaderHead);
+
+            // الحاوية
+            containerBox = new THREE.Mesh(
+                new THREE.BoxGeometry(3.4, 3.2, 8.0),
+                new THREE.MeshStandardMaterial({ color: 0xbf171e, roughness: 0.4 })
+            );
+            containerBox.position.set(0, -2.0, 0);
+            containerBox.castShadow = true;
+            spreader.add(containerBox);
+
+            boom.add(spreader);
+            vehicle.add(boom);
+
+            vehicle.position.set(0, 0, -20);
+            scene.add(vehicle);
+        }
+
+        let speed = 0;
+        let rotSpeed = 0;
+        let boomAngle = 0.18;
+
+        function handleVehicleMovement() {
+            if (keys['w']) speed = Math.min(speed + 0.008, 0.28);
+            else if (keys['s']) speed = Math.max(speed - 0.008, -0.16);
+            else speed *= 0.92;
+
+            if (keys['a']) rotSpeed = 0.022;
+            else if (keys['d']) rotSpeed = -0.022;
+            else rotSpeed = 0;
+
+            if (keys['r']) boomAngle = Math.min(boomAngle + 0.006, 0.45);
+            if (keys['f']) boomAngle = Math.max(boomAngle - 0.006, 0.06);
+
+            vehicle.rotation.y += rotSpeed * (Math.abs(speed) > 0.01 ? (speed > 0 ? 1 : -1) : 1);
+            vehicle.translateZ(speed);
+
+            boom.rotation.x = boomAngle;
+            spreader.rotation.x = -boomAngle;
+        }
+
+        function tryDeliverContainer() {
+            if (containerDelivered) return;
+
+            const contPos = new THREE.Vector3();
+            containerBox.getWorldPosition(contPos);
+
+            const targetPos = new THREE.Vector3(TARGET_STATION.x, 1.8, TARGET_STATION.z);
+            const dist = contPos.distanceTo(targetPos);
+
+            if (dist < 6.0) {
+                scene.attach(containerBox);
+                containerBox.position.set(TARGET_STATION.x, 3.4, TARGET_STATION.z);
+                containerBox.rotation.set(0, 0, 0);
+
+                containerDelivered = true;
+                document.getElementById('status-text').innerText = "✅ تم تسليم البوفيه بالكامل!";
+                document.getElementById('status-text').style.color = "#00e676";
+                document.getElementById('message-box').style.display = "block";
+            } else {
+                const statusEl = document.getElementById('status-text');
+                statusEl.innerText = "❌ لست في موقع الطاولة الصحيحة بعد!";
+                statusEl.style.color = "#ff5252";
+                setTimeout(() => {
+                    if (!containerDelivered) {
+                        statusEl.innerText = "محمولة بالرافعة - توجّه للهدف";
+                        statusEl.style.color = "#ff9800";
+                    }
+                }, 2000);
+            }
+        }
+
+        function resetGame() {
+            location.reload();
+        }
+
+        function updateCamera() {
+            if (isDriverView) {
+                const camPos = new THREE.Vector3(0, 3.8, -0.8);
+                camPos.applyMatrix4(vehicle.matrixWorld);
+                camera.position.copy(camPos);
+
+                const lookPos = new THREE.Vector3(0, 3.4, 12);
+                lookPos.applyMatrix4(vehicle.matrixWorld);
+                camera.lookAt(lookPos);
+            } else {
+                const offset = new THREE.Vector3(0, 12, -22);
+                offset.applyMatrix4(vehicle.matrixWorld);
+                camera.position.lerp(offset, 0.1);
+                camera.lookAt(vehicle.position.x, vehicle.position.y + 2.5, vehicle.position.z);
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            handleVehicleMovement();
+            updateCamera();
+            renderer.render(scene, camera);
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
