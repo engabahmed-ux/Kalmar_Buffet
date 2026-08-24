@@ -108,7 +108,7 @@
 <body>
 
     <div id="menu-modal">
-        <div class="menu-title">🥤 مرحباً بك في ضيافة شركة كالمر</div>
+        <div class="menu-title">🥤 مرحباً بك في بوفيه ضيافة كالمر</div>
         <div class="menu-sub">اختر طلبك للبدء في نقله وتوصيله بواسطة رافعة الحاويات <b>Kalmar Reachstacker</b>:</div>
         <div class="drink-options">
             <div class="drink-card" onclick="selectDrink(1)">
@@ -130,7 +130,7 @@
     </div>
 
     <div id="canvas-container"></div>
-    <div id="cam-hint">🖱️ اسحب الماوس لتدوير زاوية الرؤية | محاذاة دقيقة مطلوبة للالتقاط</div>
+    <div id="cam-hint">🖱️ اسحب الماوس لتدوير زاوية الرؤية | الالتقاط التلقائي مفعّل فور الاقتراب</div>
 
     <div id="hud">
         <div class="hud-card">
@@ -315,7 +315,7 @@
             targetStation = STATIONS.find(s => s.id === id);
             document.getElementById('selected-drink-txt').innerText = targetStation.name;
             document.getElementById('menu-modal').style.display = 'none';
-            showAlert(`اضبط الماسكة فوق الحاوية بدقة ثم ارفعها وتوجه إلى: ${targetStation.name}`, "#ffca28");
+            showAlert(`قرّب الماسكة بمحاذاة قمة الحاوية وسيتم الالتقاط التلقائي فوراً! ثم توجه إلى: ${targetStation.name}`, "#ffca28");
         }
 
         function showAlert(msg, color = "#ff9800") {
@@ -525,6 +525,9 @@
             scene.add(cargoBox);
         }
 
+        // ==============================================
+        // 4. بناء الونش والميكانيزم
+        // ==============================================
         function buildRealisticKalmarReachstacker() {
             vehicle = new THREE.Group();
 
@@ -744,7 +747,7 @@
         }
 
         // ==============================================
-        // 6. المساعدة في الالتقاط التلقائي بنسبة دقيقة ومتزنة
+        // 6. المساعدة في الالتقاط التلقائي فور الوصول للشكل الموضح في الصورتين
         // ==============================================
         function checkAutoLockProximity() {
             if (isCargoLocked || !targetStation) return;
@@ -758,8 +761,8 @@
             const horizDist = Math.hypot(spreaderWorldPos.x - cargoWorldPos.x, spreaderWorldPos.z - cargoWorldPos.z);
             const heightDiff = Math.abs(spreaderWorldPos.y - (cargoWorldPos.y + CONTAINER_DIMS.height / 2 + 0.4));
 
-            // تقليل مسافة المساعدة لتكون دقيقة وممتعة (تتطلب وزن الونش بدقة فوق الحاوية مباشرة)
-            if (horizDist < 0.65 && heightDiff < 0.25) {
+            // مسافة الالتقاط المطابقة للصور المرفقة (فرق أفقي حتى 1.7م وفرق رأسي حتى 0.95م)
+            if (horizDist < 1.7 && heightDiff < 0.95) {
                 lockContainer();
             }
         }
@@ -775,7 +778,7 @@
 
             isCargoLocked = true;
             audio.playTwistlock(true);
-            showAlert(`🔒 تم إدخال وقفل الـ Twistlocks بنجاح! ارفع الذراع وتوجه إلى: ${targetStation.name}`, "#00e676");
+            showAlert(`🔒 تم الالتقاط وقفل الـ Twistlocks بنجاح! ارفع الذراع وتوجه إلى: ${targetStation.name}`, "#00e676");
         }
 
         let speed = 0;
@@ -784,15 +787,10 @@
         function updateVehicle() {
             if (!targetStation) return;
 
-            // السرعة للأمام وللخلف
             if (keys.up) speed = Math.min(speed + 0.015, 0.26);
             else if (keys.down) speed = Math.max(speed - 0.015, -0.16);
             else speed *= 0.88;
 
-            // ==============================================
-            // تعديل اتجاه التوجيه أثناء الرجوع للخلف (Reverse Steering Logic):
-            // أثناء الرجوع للخلف (speed < 0)، ينعكس اتجاه التفاف الشاسيه ليطابق القيادة الواقعية للسيارات والمعدات ذات التوجيه الخلفي
-            // ==============================================
             const isReversing = speed < -0.01 || keys.down;
             const steerDirection = isReversing ? -1 : 1;
 
@@ -854,19 +852,6 @@
             if (!targetStation) return;
 
             if (!isCargoLocked) {
-                const spreaderWorldPos = new THREE.Vector3();
-                spreaderGroup.getWorldPosition(spreaderWorldPos);
-
-                const cargoWorldPos = new THREE.Vector3();
-                cargoBox.getWorldPosition(cargoWorldPos);
-
-                const horizDist = Math.hypot(spreaderWorldPos.x - cargoWorldPos.x, spreaderWorldPos.z - cargoWorldPos.z);
-                const heightDiff = Math.abs(spreaderWorldPos.y - (cargoWorldPos.y + CONTAINER_DIMS.height / 2 + 0.4));
-
-                if (horizDist > 1.2 || heightDiff > 0.45) {
-                    showAlert("⚠️ اضبط الماسكة فوق الحاوية وتأكد من محاذاة الفتحات الأربع بدقة.");
-                    return;
-                }
                 lockContainer();
             } else {
                 const cargoWorldPos = new THREE.Vector3();
