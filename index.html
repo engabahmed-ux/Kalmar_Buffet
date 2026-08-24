@@ -3,100 +3,147 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Kalmar Reachstacker - لعبة بوفيه كالمر التفاعلية</title>
+    <title>Kalmar Reachstacker - تحدي ضيافة كالمر</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; font-family: 'Segoe UI', Tahoma, sans-serif; }
-        body { background: #0c0f14; color: #fff; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
+        body { background: #0a0d13; color: #fff; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; }
         
         #game-canvas {
-            background: #1f2530;
+            background: #1a202c;
             border: 3px solid #d31b23;
             border-radius: 14px;
-            box-shadow: 0 12px 50px rgba(0,0,0,0.85);
+            box-shadow: 0 12px 45px rgba(0,0,0,0.85);
             max-width: 98vw;
-            max-height: 75vh;
+            max-height: 74vh;
         }
 
-        /* شاشات الـ HUD */
+        /* شريط المعلومات */
         #hud {
-            position: absolute; top: 12px; left: 16px; right: 16px;
+            position: absolute; top: 10px; left: 16px; right: 16px;
             display: flex; justify-content: space-between; pointer-events: none; z-index: 10;
         }
         .hud-card {
-            background: rgba(14, 18, 26, 0.92);
+            background: rgba(15, 20, 30, 0.92);
             border: 2px solid #d31b23;
             border-radius: 12px;
-            padding: 10px 18px;
+            padding: 8px 16px;
             pointer-events: auto;
-            backdrop-filter: blur(6px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+            backdrop-filter: blur(8px);
         }
         .hud-title { font-size: 11px; color: #8fa0b5; font-weight: bold; }
-        .hud-val { font-size: 16px; font-weight: bold; color: #ffca28; margin-top: 2px; }
+        .hud-val { font-size: 15px; font-weight: bold; color: #ffca28; margin-top: 2px; }
 
-        /* أزرار التحكم الديناميكية */
-        #controls-wrapper {
-            position: absolute; bottom: 12px; left: 0; right: 0;
-            display: flex; justify-content: space-between; align-items: flex-end;
-            padding: 0 24px; z-index: 10; pointer-events: none;
+        /* شريط التنبيهات المساعد الصوتي/النصي */
+        #alert-box {
+            position: absolute; top: 75px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.88); border: 2px solid #ff9800; border-radius: 20px;
+            padding: 6px 20px; font-size: 13px; font-weight: bold; color: #fff;
+            display: none; z-index: 15; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: all 0.2s;
         }
-        
+
+        /* شاشة اختيار المشروب في البداية */
+        #menu-modal {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(8, 12, 18, 0.95); display: flex; flex-direction: column;
+            align-items: center; justify-content: center; z-index: 40; padding: 20px;
+        }
+        .menu-title { font-size: 26px; color: #ffca28; margin-bottom: 6px; }
+        .menu-sub { font-size: 14px; color: #cfd8dc; margin-bottom: 24px; }
+        .drink-options { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; }
+        .drink-card {
+            background: #161f2e; border: 2px solid #334155; border-radius: 14px;
+            padding: 20px 25px; width: 220px; text-align: center; cursor: pointer;
+            transition: 0.2s;
+        }
+        .drink-card:hover { border-color: #d31b23; transform: translateY(-5px); background: #1e293b; }
+        .drink-icon { font-size: 38px; margin-bottom: 8px; }
+        .drink-name { font-size: 16px; font-weight: bold; color: #fff; margin-bottom: 4px; }
+        .drink-table { font-size: 12px; color: #94a3b8; }
+
+        /* أزرار التحكم */
+        #controls-wrapper {
+            position: absolute; bottom: 10px; left: 0; right: 0;
+            display: flex; justify-content: space-between; align-items: flex-end;
+            padding: 0 20px; z-index: 10; pointer-events: none;
+        }
         .dpad-grid {
-            display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(2, 56px);
+            display: grid; grid-template-columns: repeat(3, 54px); grid-template-rows: repeat(2, 54px);
             gap: 6px; pointer-events: auto;
         }
         .ctrl-btn {
             background: #1a2332; border: 2px solid #3a4b66; color: #fff;
-            font-size: 20px; font-weight: bold; border-radius: 10px;
+            font-size: 18px; font-weight: bold; border-radius: 10px;
             display: flex; align-items: center; justify-content: center;
-            cursor: pointer; transition: 0.1s;
+            cursor: pointer;
         }
         .ctrl-btn:active, .ctrl-btn.active { background: #d31b23; border-color: #ff5252; transform: scale(0.92); }
 
-        /* منطقة الهيدروليك والأكشن */
-        .action-panel {
-            display: flex; gap: 10px; align-items: center; pointer-events: auto;
-        }
+        .action-panel { display: flex; gap: 8px; align-items: center; pointer-events: auto; }
         .hyd-btn {
-            width: 70px; height: 58px; background: #263238; border: 2px solid #546e7a;
-            color: #ffeb3b; font-size: 13px; font-weight: bold; border-radius: 10px;
+            width: 65px; height: 54px; background: #263238; border: 2px solid #546e7a;
+            color: #ffeb3b; font-size: 12px; font-weight: bold; border-radius: 10px;
             display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
         }
-        .hyd-btn:active { background: #37474f; transform: scale(0.92); }
+        .hyd-btn:active, .hyd-btn.active { background: #37474f; transform: scale(0.92); }
 
         #main-action-btn {
-            width: 145px; height: 58px; border-radius: 12px;
+            width: 130px; height: 54px; border-radius: 10px;
             background: linear-gradient(135deg, #d31b23, #a7141b);
             border: 2px solid #ff5252; color: #fff; font-size: 14px; font-weight: bold;
-            cursor: pointer; transition: 0.15s;
+            cursor: pointer;
         }
         #main-action-btn:active { transform: scale(0.92); }
 
-        #win-modal {
+        /* نوافذ النهاية */
+        .modal-end {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(12, 18, 28, 0.98); border: 3px solid #00e676;
-            border-radius: 16px; padding: 30px 45px; text-align: center;
-            display: none; z-index: 30; box-shadow: 0 10px 50px rgba(0, 230, 118, 0.4);
+            background: rgba(12, 18, 28, 0.98); border-radius: 16px; padding: 28px 40px;
+            text-align: center; display: none; z-index: 30; box-shadow: 0 10px 50px rgba(0,0,0,0.7);
         }
     </style>
 </head>
 <body>
 
+    <!-- نافذة اختيار المشروب في البداية -->
+    <div id="menu-modal">
+        <div class="menu-title">🥤 مرحباً بك في بوفيه شركة كالمر</div>
+        <div class="menu-sub">اختر مشروبك المفضل لتبدأ مهمة نقله برافعة الحاويات Kalmar Reachstacker:</div>
+        <div class="drink-options">
+            <div class="drink-card" onclick="selectDrink(1)">
+                <div class="drink-icon">☕</div>
+                <div class="drink-name">قهوة وإسبريسو ساخن</div>
+                <div class="drink-table">طاولة رقم 1 (الزرقاء)</div>
+            </div>
+            <div class="drink-card" onclick="selectDrink(2)">
+                <div class="drink-icon">🍹</div>
+                <div class="drink-name">عصائر طازجة وموهيتو</div>
+                <div class="drink-table">طاولة رقم 2 (الخضراء)</div>
+            </div>
+            <div class="drink-card" onclick="selectDrink(3)">
+                <div class="drink-icon">🥤</div>
+                <div class="drink-name">مشروبات مثلجة وصودا</div>
+                <div class="drink-table">طاولة رقم 3 (البرتقالية)</div>
+            </div>
+        </div>
+    </div>
+
     <div id="hud">
         <div class="hud-card">
-            <div class="hud-title">🎯 طلب الضيف (Target Drink Station)</div>
-            <div class="hud-val">طاولة 2: بوفيه العصائر والموهيتو (الخضراء)</div>
+            <div class="hud-title">🍹 طلب الضيف المحدد</div>
+            <div class="hud-val" id="selected-drink-txt">يرجى الاختيار...</div>
         </div>
         <div class="hud-card" style="text-align: center;">
-            <div class="hud-title">ارتفاع الذراع | حالة القفل</div>
+            <div class="hud-title">بيانات الونش (Kalmar Telemetry)</div>
             <div class="hud-val" id="telemetry">الارتفاع: 0.0m | 🔓 مفتوح</div>
         </div>
     </div>
 
-    <canvas id="game-canvas" width="920" height="600"></canvas>
+    <div id="alert-box">⚠️ تنبيه</div>
+
+    <canvas id="game-canvas" width="920" height="580"></canvas>
 
     <div id="controls-wrapper">
-        <!-- التوجيه والقيادة -->
         <div class="dpad-grid">
             <div></div>
             <button class="ctrl-btn" id="b-up">▲</button>
@@ -106,7 +153,6 @@
             <button class="ctrl-btn" id="b-right">▶</button>
         </div>
 
-        <!-- التحكم الهيدروليكي وزر القفل -->
         <div class="action-panel">
             <button class="hyd-btn" id="b-lift-up"><span>▲ رفع</span><span style="font-size:10px; color:#aaa;">[R]</span></button>
             <button class="hyd-btn" id="b-lift-down"><span>▼ خفض</span><span style="font-size:10px; color:#aaa;">[F]</span></button>
@@ -114,17 +160,25 @@
         </div>
     </div>
 
-    <div id="win-modal">
-        <h2 style="color: #00e676; margin-bottom: 8px;">🎉 تم تسليم الحاوية بنجاح تام!</h2>
-        <p style="color: #cfd8dc; margin-bottom: 18px;">تم الإنزال والتثبيت فوق طاولة المشروبات بدقة متناهية.<br>استمتع بوجبتك ومشروبك في ضيافة شركة كالمر!</p>
-        <button class="ctrl-btn" style="padding: 10px 24px; margin: 0 auto; font-size: 15px; background: #00e676; color: #000; border: none;" onclick="location.reload()">إعادة التجربة 🔄</button>
+    <!-- نافذة النجاح -->
+    <div id="win-modal" class="modal-end" style="border: 3px solid #00e676;">
+        <h2 style="color: #00e676; margin-bottom: 8px;">🎉 إتقان تام وهبوط سلس!</h2>
+        <p style="color: #cfd8dc; margin-bottom: 16px;">تم تسليم الحاوية ووضعها فوق طاولة المشروبات بالزاوية والسرعة الصحيحة.<br>استمتع بمشروبك في ضيافة شركة كالمر!</p>
+        <button class="ctrl-btn" style="padding: 10px 24px; margin: 0 auto; font-size: 15px; background: #00e676; color: #000; border: none;" onclick="location.reload()">طلب مشروب آخر 🔄</button>
+    </div>
+
+    <!-- نافذة الفشل والكسر -->
+    <div id="fail-modal" class="modal-end" style="border: 3px solid #ff5252;">
+        <h2 style="color: #ff5252; margin-bottom: 8px;">💥 تحطمت الطاولة والمشروبات!</h2>
+        <p id="fail-reason" style="color: #cfd8dc; margin-bottom: 16px; font-size: 14px;"></p>
+        <button class="ctrl-btn" style="padding: 10px 24px; margin: 0 auto; font-size: 15px; background: #d31b23; color: #fff; border: none;" onclick="location.reload()">إعادة المحاولة 🔄</button>
     </div>
 
     <script>
         // ==============================================
-        // 1. محرك الصوت المطور (Web Audio API)
+        // 1. نظام الصوت المتطور
         // ==============================================
-        class KalmarSoundSystem {
+        class KalmarAudio {
             constructor() {
                 this.ctx = null;
                 this.engineGain = null;
@@ -137,16 +191,15 @@
                 if (!AudioCtx) return;
                 this.ctx = new AudioCtx();
 
-                // صوت محرك ديزل هادئ
                 this.engineOsc = this.ctx.createOscillator();
                 this.engineGain = this.ctx.createGain();
                 this.engineOsc.type = 'triangle';
-                this.engineOsc.frequency.setValueAtTime(38, this.ctx.currentTime);
+                this.engineOsc.frequency.setValueAtTime(36, this.ctx.currentTime);
                 this.engineGain.gain.setValueAtTime(0.015, this.ctx.currentTime);
 
                 const filter = this.ctx.createBiquadFilter();
                 filter.type = 'lowpass';
-                filter.frequency.setValueAtTime(140, this.ctx.currentTime);
+                filter.frequency.setValueAtTime(130, this.ctx.currentTime);
 
                 this.engineOsc.connect(filter);
                 filter.connect(this.engineGain);
@@ -156,36 +209,49 @@
             }
             setEnginePitch(spdRatio) {
                 if (!this.isReady) return;
-                const targetFreq = 38 + Math.abs(spdRatio) * 45;
+                const targetFreq = 36 + Math.abs(spdRatio) * 40;
                 this.engineOsc.frequency.setTargetAtTime(targetFreq, this.ctx.currentTime, 0.08);
             }
-            playHydraulicSound() {
+            playHydraulic() {
                 if (!this.isReady) return;
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(120, this.ctx.currentTime);
-                gain.gain.setValueAtTime(0.04, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.15);
+                osc.frequency.setValueAtTime(110, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.035, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
                 osc.start();
-                osc.stop(this.ctx.currentTime + 0.15);
+                osc.stop(this.ctx.currentTime + 0.12);
             }
-            playTwistlock(lock) {
+            playLockSound(isLock) {
                 if (!this.isReady) return;
-                // صوت قفل التويستلوك الميكانيكي الحقيقي
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(lock ? 280 : 160, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.18);
-                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                osc.frequency.setValueAtTime(isLock ? 320 : 180, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(60, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
                 osc.start();
                 osc.stop(this.ctx.currentTime + 0.2);
+            }
+            playCrash() {
+                if (!this.isReady) return;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(90, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.4, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.5);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.5);
             }
             playVictory() {
                 if (!this.isReady) return;
@@ -195,7 +261,7 @@
                         const gain = this.ctx.createGain();
                         osc.type = 'triangle';
                         osc.frequency.setValueAtTime(f, this.ctx.currentTime);
-                        gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                        gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
                         gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.35);
                         osc.connect(gain);
                         gain.connect(this.ctx.destination);
@@ -205,40 +271,61 @@
                 });
             }
         }
-        const snd = new KalmarSoundSystem();
+        const audio = new KalmarAudio();
 
         // ==============================================
-        // 2. المحاكاة والفيزياء الديناميكية ثلاثية الأبعاد
+        // 2. إعداد المشهد والفيزياء
         // ==============================================
         const canvas = document.getElementById('game-canvas');
         const ctx = canvas.getContext('2d');
 
+        let targetStation = null;
+        let gameOver = false;
+
+        const TABLES = [
+            { id: 1, name: "طاولة 1: قهوة وإسبريسو", color: "#1976d2", x: 180, y: 130, w: 140, h: 70, height: 1.2 },
+            { id: 2, name: "طاولة 2: عصائر وموهيتو", color: "#388e3c", x: 460, y: 130, w: 140, h: 70, height: 1.2 },
+            { id: 3, name: "طاولة 3: مشروبات مثلجة", color: "#f57c00", x: 740, y: 130, w: 140, h: 70, height: 1.2 }
+        ];
+
         const truck = {
-            x: 460, y: 480,
+            x: 460, y: 470,
             angle: -Math.PI / 2,
             speed: 0,
-            boomHeight: 0.0, // ارتفاع الذراع من 0.0 إلى 3.5 متر
+            boomHeight: 0.0,
             armLength: 82
         };
 
         const cargo = {
             x: 460, y: 300,
-            z: 0.0,          // الارتفاع عن الأرض
+            angle: 0.15,      // الحاوية موضوعة بزاوية مائلة قليلاً في البداية لاختبار مهارة اللاعب
+            z: 0.0,
             isLocked: false,
             isDelivered: false
         };
 
-        const TABLES = [
-            { id: 1, name: "☕ قهوة وإسبريسو", color: "#1976d2", x: 180, y: 130, w: 140, h: 70, targetHeight: 1.2 },
-            { id: 2, name: "🍹 عصائر وموهيتو (الهدف)", color: "#388e3c", x: 460, y: 130, w: 140, h: 70, targetHeight: 1.2, isTarget: true },
-            { id: 3, name: "🥤 مشروبات مثلجة", color: "#f57c00", x: 740, y: 130, w: 140, h: 70, targetHeight: 1.2 }
-        ];
-
         const keys = { up: false, down: false, left: false, right: false, liftUp: false, liftDown: false };
 
-        // مدخلات لوحة المفاتيح
+        function selectDrink(id) {
+            audio.init();
+            targetStation = TABLES.find(t => t.id === id);
+            document.getElementById('selected-drink-txt').innerText = targetStation.name;
+            document.getElementById('menu-modal').style.display = 'none';
+            showAlert(`توجه للحاوية والتقطها بزاوية صحيحة ثم سلّمها إلى: ${targetStation.name}`, "#ffca28");
+        }
+
+        function showAlert(msg, color = "#ff9800") {
+            const box = document.getElementById('alert-box');
+            box.innerText = msg;
+            box.style.borderColor = color;
+            box.style.display = 'block';
+            clearTimeout(box.timer);
+            box.timer = setTimeout(() => { box.style.display = 'none'; }, 3200);
+        }
+
+        // لوحة المفاتيح
         window.addEventListener('keydown', e => {
-            snd.init();
+            audio.init();
             const k = e.key.toLowerCase();
             if (k === 'w' || k === 'arrowup' || k === 'ص') keys.up = true;
             if (k === 's' || k === 'arrowdown' || k === 'س') keys.down = true;
@@ -259,114 +346,151 @@
             if (k === 'f' || k === 'ب') keys.liftDown = false;
         });
 
-        // ربط أزرار اللمس
-        function setupButton(id, keyName) {
+        function setupBtn(id, keyName) {
             const el = document.getElementById(id);
-            const start = () => { snd.init(); keys[keyName] = true; el.classList.add('active'); };
+            const start = () => { audio.init(); keys[keyName] = true; el.classList.add('active'); };
             const end = () => { keys[keyName] = false; el.classList.remove('active'); };
-            el.addEventListener('mousedown', start);
-            el.addEventListener('mouseup', end);
+            el.addEventListener('mousedown', start); el.addEventListener('mouseup', end);
             el.addEventListener('touchstart', e => { e.preventDefault(); start(); });
             el.addEventListener('touchend', e => { e.preventDefault(); end(); });
         }
-        setupButton('b-up', 'up');
-        setupButton('b-down', 'down');
-        setupButton('b-left', 'left');
-        setupButton('b-right', 'right');
-        setupButton('b-lift-up', 'liftUp');
-        setupButton('b-lift-down', 'liftDown');
+        setupBtn('b-up', 'up'); setupBtn('b-down', 'down');
+        setupBtn('b-left', 'left'); setupBtn('b-right', 'right');
+        setupBtn('b-lift-up', 'liftUp'); setupBtn('b-lift-down', 'liftDown');
 
         // ==============================================
-        // 3. منطق الالتقاط والإنزال والفيزياء
+        // 3. المنطق الواقعي للقفل والإنزال
         // ==============================================
         function toggleTwistlocks() {
-            if (cargo.isDelivered) return;
+            if (gameOver || !targetStation) return;
 
             const spreaderX = truck.x + Math.cos(truck.angle) * truck.armLength;
             const spreaderY = truck.y + Math.sin(truck.angle) * truck.armLength;
             const dist = Math.hypot(spreaderX - cargo.x, spreaderY - cargo.y);
 
-            if (!cargo.isLocked) {
-                // محاولة القفل: يجب أن يكون الـ Spreader قريباً جداً وعلى نفس ارتفاع الحاوية
-                const heightDiff = Math.abs(truck.boomHeight - cargo.z);
-                if (dist < 42 && heightDiff < 0.6) {
-                    cargo.isLocked = true;
-                    snd.playTwistlock(true);
-                }
-            } else {
-                // محاولة الإنزال
-                const target = TABLES[1];
-                const distToBuffet = Math.hypot(cargo.x - target.x, cargo.y - target.y);
+            // حساب فرق الزاوية بين رأس الونش والحاوية
+            let angleDiff = Math.abs((truck.angle - Math.PI / 2) - cargo.angle) % (Math.PI * 2);
+            if (angleDiff > Math.PI) angleDiff = Math.PI * 2 - angleDiff;
+            const isAngleAligned = (angleDiff < 0.45 || Math.abs(angleDiff - Math.PI) < 0.45); // سماحية صغيرة ممتعة (~25 درجة)
 
-                if (distToBuffet < 65 && truck.boomHeight < 1.6) {
-                    // إنزال وتثبيت ناجح فوق طاولة العصائر
+            if (!cargo.isLocked) {
+                // شروط الالتقاط الواقعية
+                if (dist > 45) {
+                    showAlert("⚠️ أنت بعيد عن الحاوية! اقترب بالونش أكثر.");
+                    return;
+                }
+                if (Math.abs(truck.boomHeight - cargo.z) > 0.5) {
+                    showAlert("⚠️ الارتفاع غير مناسب! اخفض الذراع لملامسة قمة الحاوية.");
+                    return;
+                }
+                if (!isAngleAligned) {
+                    showAlert("⚠️ زاوية الونش مائلة! حاذِ الونش مع اتجاه الحاوية لتثبيت الأقفال.");
+                    return;
+                }
+
+                // قفل ناجح مع مساعدة توجيه خفيفة
+                cargo.isLocked = true;
+                cargo.angle = truck.angle - Math.PI / 2; // تثبيت الزاوية مع حركة الونش
+                audio.playLockSound(true);
+                showAlert("🔒 تم قفل الـ Twistlocks بنجاح! ارفع الذراع وتوجه للطاولة.", "#00e676");
+            } else {
+                // شروط الإنزال
+                const nearTable = TABLES.find(t => Math.hypot(cargo.x - t.x, cargo.y - t.y) < 70);
+
+                if (nearTable) {
+                    // إذا كان فوق طاولة خاطئة
+                    if (nearTable.id !== targetStation.id) {
+                        triggerFail(`أنزلت الطلب فوق ${nearTable.name} بينما المطلوب هو ${targetStation.name}!`);
+                        return;
+                    }
+
+                    // إذا كان الارتفاع كبيراً جداً (سقوط عنيف وكسر)
+                    if (truck.boomHeight > 1.8) {
+                        triggerFail("تم إنزال الحاوية بقوة وسقطت من ارتفاع عالٍ فتحطمت الطاولة والمشروبات!");
+                        return;
+                    }
+
+                    // إذا كانت زاوية الإنزال مشوهة جداً
+                    if (Math.abs(Math.cos(truck.angle)) > 0.45) {
+                        triggerFail("تم إنزال الحاوية بزاوية مائلة وسقطت من على طرف الطاولة!");
+                        return;
+                    }
+
+                    // إنزال ناجح وسلس
                     cargo.isLocked = false;
                     cargo.isDelivered = true;
-                    cargo.x = target.x;
-                    cargo.y = target.y;
-                    cargo.z = 1.2;
-                    snd.playTwistlock(false);
-                    snd.playVictory();
+                    cargo.x = nearTable.x;
+                    cargo.y = nearTable.y;
+                    cargo.z = nearTable.height;
+                    cargo.angle = 0;
+                    gameOver = true;
+                    audio.playLockSound(false);
+                    audio.playVictory();
                     document.getElementById('win-modal').style.display = 'block';
                 } else {
                     // إنزال عادي على الأرض
+                    if (truck.boomHeight > 1.2) {
+                        showAlert("⚠️ احذر! لا تنزل الحاوية على الأرض من هذا الارتفاع.");
+                        return;
+                    }
                     cargo.isLocked = false;
-                    cargo.z = Math.max(0, truck.boomHeight);
-                    snd.playTwistlock(false);
+                    cargo.z = 0;
+                    audio.playLockSound(false);
+                    showAlert("🔓 تم فك الأقفال وإنزال الحاوية على الأرض.");
                 }
             }
         }
 
+        function triggerFail(reason) {
+            gameOver = true;
+            cargo.isLocked = false;
+            audio.playCrash();
+            document.getElementById('fail-reason').innerText = reason;
+            document.getElementById('fail-modal').style.display = 'block';
+        }
+
         function update() {
-            // القيادة والانعطاف
-            if (keys.up) truck.speed = Math.min(truck.speed + 0.22, 3.2);
-            else if (keys.down) truck.speed = Math.max(truck.speed - 0.22, -2.0);
+            if (gameOver || !targetStation) return;
+
+            if (keys.up) truck.speed = Math.min(truck.speed + 0.2, 2.8);
+            else if (keys.down) truck.speed = Math.max(truck.speed - 0.2, -1.8);
             else truck.speed *= 0.88;
 
-            if (keys.left) truck.angle -= 0.042;
-            if (keys.right) truck.angle += 0.042;
+            if (keys.left) truck.angle -= 0.038;
+            if (keys.right) truck.angle += 0.038;
 
             truck.x += Math.cos(truck.angle) * truck.speed;
             truck.y += Math.sin(truck.angle) * truck.speed;
 
-            // حدود الساحة
             truck.x = Math.max(50, Math.min(canvas.width - 50, truck.x));
             truck.y = Math.max(60, Math.min(canvas.height - 60, truck.y));
 
-            // الرفع والإنزال الهيدروليكي
             let isHydraulic = false;
-            if (keys.liftUp && truck.boomHeight < 3.2) {
-                truck.boomHeight += 0.035;
-                isHydraulic = true;
-            }
-            if (keys.liftDown && truck.boomHeight > 0.0) {
-                truck.boomHeight -= 0.035;
-                isHydraulic = true;
-            }
-            if (isHydraulic) snd.playHydraulicSound();
+            if (keys.liftUp && truck.boomHeight < 3.2) { truck.boomHeight += 0.035; isHydraulic = true; }
+            if (keys.liftDown && truck.boomHeight > 0.0) { truck.boomHeight -= 0.035; isHydraulic = true; }
+            if (isHydraulic) audio.playHydraulic();
 
-            snd.setEnginePitch(truck.speed / 3.2);
+            audio.setEnginePitch(truck.speed / 2.8);
 
-            // تحريك الحاوية مع الونش أثناء القفل
             if (cargo.isLocked) {
                 cargo.x = truck.x + Math.cos(truck.angle) * truck.armLength;
                 cargo.y = truck.y + Math.sin(truck.angle) * truck.armLength;
                 cargo.z = truck.boomHeight;
+                cargo.angle = truck.angle - Math.PI / 2;
             }
 
-            // تحديث شاشة البيانات
             document.getElementById('telemetry').innerText = 
                 `الارتفاع: ${truck.boomHeight.toFixed(1)}m | ${cargo.isLocked ? "🔒 مقفول (Locked)" : "🔓 مفتوح"}`;
         }
 
         // ==============================================
-        // 4. الرسم مع تأثيرات الإسقاط والارتفاع (3D Dynamics)
+        // 4. الرسم مع تأثيرات 3D والظلال
         // ==============================================
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // شبكة أرضية المعرض
-            ctx.strokeStyle = '#2d3748';
+            // شبكة الأرضية
+            ctx.strokeStyle = '#283344';
             ctx.lineWidth = 1;
             for (let x = 0; x < canvas.width; x += 46) {
                 ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
@@ -375,25 +499,22 @@
                 ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
             }
 
-            // رسم طاولات البوفيه (حاويات أفقية)
+            // طاولات البوفيه
             TABLES.forEach(t => {
                 ctx.save();
                 ctx.translate(t.x, t.y);
 
-                // ظل الطاولة
                 ctx.fillStyle = 'rgba(0,0,0,0.5)';
-                ctx.fillRect(-t.w/2 + 8, -t.h/2 + 8, t.w, t.h);
+                ctx.fillRect(-t.w/2 + 6, -t.h/2 + 6, t.w, t.h);
 
-                // جسم الحاوية
                 ctx.fillStyle = t.color;
                 ctx.fillRect(-t.w/2, -t.h/2, t.w, t.h);
 
-                // منصة الإنزال המحددة
-                ctx.strokeStyle = t.isTarget ? '#ffeb3b' : 'rgba(255,255,255,0.4)';
-                ctx.lineWidth = t.isTarget ? 3 : 1;
+                const isMyTarget = targetStation && targetStation.id === t.id;
+                ctx.strokeStyle = isMyTarget ? '#ffeb3b' : 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = isMyTarget ? 3 : 1;
                 ctx.strokeRect(-t.w/2 + 6, -t.h/2 + 6, t.w - 12, t.h - 12);
 
-                // اسم الطاولة
                 ctx.fillStyle = '#ffffff';
                 ctx.font = 'bold 13px Tahoma';
                 ctx.textAlign = 'center';
@@ -402,19 +523,19 @@
                 ctx.restore();
             });
 
-            // رسم حاوية الطلب مع تأثير الارتفاع ثلاثي الأبعاد
+            // رسم حاوية الطلب مع تأثير الارتفاع
             ctx.save();
-            const cargoShadowOffset = 4 + cargo.z * 10;
+            const shadowOffset = 4 + cargo.z * 10;
             const cargoScale = 1.0 + cargo.z * 0.08;
 
-            // ظل الحاوية على الأرض
+            // ظل الحاوية
             ctx.translate(cargo.x, cargo.y);
-            ctx.fillStyle = `rgba(0,0,0,${Math.max(0.2, 0.55 - cargo.z * 0.1)})`;
-            ctx.fillRect(-22 + cargoShadowOffset, -45 + cargoShadowOffset, 44, 90);
+            ctx.fillStyle = `rgba(0,0,0,${Math.max(0.18, 0.5 - cargo.z * 0.1)})`;
+            ctx.fillRect(-22 + shadowOffset, -45 + shadowOffset, 44, 90);
 
-            // جسم الحاوية المرتفع
+            // الحاوية المرفوعة
             ctx.scale(cargoScale, cargoScale);
-            if (cargo.isLocked) ctx.rotate(truck.angle);
+            ctx.rotate(cargo.angle);
 
             ctx.fillStyle = '#d31b23';
             ctx.fillRect(-20, -46, 40, 92);
@@ -422,16 +543,14 @@
             ctx.lineWidth = 2;
             ctx.strokeRect(-20, -46, 40, 92);
 
-            // زوايا التويستلوك الأربع
+            // مقابض وأقفال الحاوية الأربعة
             ctx.fillStyle = cargo.isLocked ? '#00e676' : '#ffca28';
-            [[-18,-44], [14,-44], [-18,40], [14,40]].forEach(p => {
-                ctx.fillRect(p[0], p[1], 4, 4);
-            });
+            [[-18,-44], [14,-44], [-18,40], [14,40]].forEach(p => ctx.fillRect(p[0], p[1], 4, 4));
 
             ctx.fillStyle = '#fff';
             ctx.font = 'bold 9px sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('KALMAR CARGO', 0, 3);
+            ctx.fillText('KALMAR ORDER', 0, 3);
             ctx.restore();
 
             // رسم ونش Kalmar Reachstacker
@@ -439,43 +558,35 @@
             ctx.translate(truck.x, truck.y);
             ctx.rotate(truck.angle);
 
-            // ظل الونش
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
             ctx.fillRect(-45, -28, 90, 56);
 
             // العجلات
             ctx.fillStyle = '#111';
-            ctx.fillRect(-38, -32, 22, 9);
-            ctx.fillRect(20, -32, 22, 9);
-            ctx.fillRect(-38, 23, 22, 9);
-            ctx.fillRect(20, 23, 22, 9);
+            ctx.fillRect(-38, -32, 22, 9); ctx.fillRect(20, -32, 22, 9);
+            ctx.fillRect(-38, 23, 22, 9); ctx.fillRect(20, 23, 22, 9);
 
-            // شاسيه كالمر الأحمر
+            // الشاسيه
             ctx.fillStyle = '#d31b23';
             ctx.fillRect(-42, -25, 84, 50);
 
-            // الثقل الخلفي مع خطوط الأمان
-            ctx.fillStyle = '#99141a';
+            // الثقل الخلفي
+            ctx.fillStyle = '#8e1218';
             ctx.fillRect(-42, -25, 18, 50);
 
-            // كابينة القيادة
+            // الكابينة
             ctx.fillStyle = '#1e293b';
             ctx.fillRect(-10, -18, 26, 36);
 
-            // الذراع الهيدروليكي الممتد مع تأثير الارتفاع
-            const boomDrawLength = truck.armLength - 5;
+            // الذراع الرئيسي
             ctx.fillStyle = '#0f172a';
-            ctx.fillRect(5, -8, boomDrawLength, 16);
+            ctx.fillRect(5, -8, truck.armLength - 5, 16);
 
-            // أسطوانات الهيدروليك Chrome
-            ctx.fillStyle = '#e2e8f0';
-            ctx.fillRect(15, -4, 25, 8);
-
-            // الماسكة (Spreader) ومؤشرات التويستلوك
+            // الماسكة (Spreader)
             ctx.fillStyle = '#334155';
             ctx.fillRect(truck.armLength - 8, -26, 14, 52);
 
-            // أذرع الإرشاد الصفراء (Flippers)
+            // زعانف الإرشاد
             ctx.fillStyle = cargo.isLocked ? '#00e676' : '#ffeb3b';
             ctx.fillRect(truck.armLength - 10, -29, 16, 5);
             ctx.fillRect(truck.armLength - 10, 24, 16, 5);
